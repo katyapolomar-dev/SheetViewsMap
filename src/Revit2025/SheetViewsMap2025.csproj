@@ -1,0 +1,66 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    РџСЂРѕРµРєС‚ РґР»СЏ РѕРґРЅРѕР№ РІРµСЂСЃРёРё Revit.
+    РСЃС…РѕРґРЅРёРєРё РѕР±С‰РёРµ РґР»СЏ РІСЃРµС… РІРµСЂСЃРёР№ Рё Р»РµР¶Р°С‚ РІ РїР°РїРєРµ src\Shared.
+    Р’РµСЂСЃРёСЏ Revit Р·Р°РґР°С‘С‚СЃСЏ РїСЂРё СЃР±РѕСЂРєРµ: dotnet build ... -p:RevitVersion=2021
+    (РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ 2023)
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>7.3</LangVersion>
+    <AssemblyName>SheetViewsMap2025</AssemblyName>
+    <RootNamespace>SheetViewsMap</RootNamespace>
+    <Product>Sheet Views Map</Product>
+    <Company>SheetViewsMap</Company>
+    <Version>1.0.0</Version>
+    <NeutralLanguage>ru-RU</NeutralLanguage>
+    <DebugType>portable</DebugType>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath>..\..\out\$(RevitVersion)\</OutputPath>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <RevitVersion Condition="'$(RevitVersion)' == ''">2023</RevitVersion>
+    <RevitDir>$(ProgramFiles)\Autodesk\Revit $(RevitVersion)\</RevitDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- РћР±С‰РёР№ РєРѕРґ: РїРѕРґРєР»СЋС‡Р°РµРј С‚Рµ Р¶Рµ СЃР°РјС‹Рµ С„Р°Р№Р»С‹, С‡С‚Рѕ Рё РІ РїСЂРѕРµРєС‚Рµ РґР»СЏ РґСЂСѓРіРѕР№ РІРµСЂСЃРёРё. -->
+    <Compile Include="..\Shared\**\*.cs" LinkBase="Shared" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      РџР°РєРµС‚ РЅСѓР¶РµРЅ, С‡С‚РѕР±С‹ СЃР±РѕСЂРєР° .NET Framework 4.8 СЂР°Р±РѕС‚Р°Р»Р° Р±РµР· Visual Studio
+      (dotnet build СЃР°Рј СЃРєР°С‡Р°РµС‚ СЌС‚Р°Р»РѕРЅРЅС‹Рµ СЃР±РѕСЂРєРё .NET Framework).
+    -->
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      РЎСЃС‹Р»РєРё РЅР° API Revit Р±РµСЂС‘Рј РёР· СѓСЃС‚Р°РЅРѕРІР»РµРЅРЅРѕРіРѕ Revit.
+      Private=false РѕР±СЏР·Р°С‚РµР»СЊРЅРѕ: DLL Revit РєРѕРїРёСЂРѕРІР°С‚СЊ РІ РІС‹С…РѕРґРЅСѓСЋ РїР°РїРєСѓ РЅРµР»СЊР·СЏ,
+      РёРЅР°С‡Рµ Revit Р·Р°РіСЂСѓР·РёС‚ РЅРµ С‚Сѓ СЃР±РѕСЂРєСѓ.
+    -->
+    <Reference Include="RevitAPI">
+      <HintPath>$(RevitDir)RevitAPI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="RevitAPIUI">
+      <HintPath>$(RevitDir)RevitAPIUI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- WPF: РїР°РЅРµР»СЊ РїРѕСЃС‚СЂРѕРµРЅР° РЅР° XAML-РєРѕРЅС‚СЂРѕР»Р°С…, СЃРѕР±РёСЂР°РµРјС‹С… РІ РєРѕРґРµ. -->
+    <Reference Include="WindowsBase" />
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Add-in manifest template for Sheet Views Map.
+
+  build.cmd substitutes the real DLL path here and writes the
+  resulting .addin file into the Revit add-ins folder.
+
+  Keep this file ASCII-only: Revit parses .addin as UTF-8 and non-ASCII text
+  here has caused mojibake in the past. Do not edit the generated .addin by
+  hand - it is overwritten on every build.
+-->
+<RevitAddIns>
+  <AddIn Type="Application">
+    <Name>SheetViewsMap</Name>
+    <Assembly>__ASSEMBLY__</Assembly>
+    <AddInId>9f2a7c41-58d6-4b0e-9a73-1c4e8d5f0b26</AddInId>
+    <FullClassName>SheetViewsMap.App</FullClassName>
+    <VendorId>SVMP</VendorId>
+    <VendorDescription>Sheet Views Map</VendorDescription>
+  </AddIn>
+</RevitAddIns>

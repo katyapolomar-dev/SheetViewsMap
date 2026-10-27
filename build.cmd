@@ -15,7 +15,7 @@ rem =============================================================
 setlocal enabledelayedexpansion
 
 set "ROOT=%~dp0"
-set "VERSIONS=2021 2022 2023"
+set "VERSIONS=2021 2025"
 set "DEPLOY=%LOCALAPPDATA%\SheetViewsMap"
 set "TMPL=%ROOT%addins\SheetViewsMap.addin.template"
 set "BUILT=0"
