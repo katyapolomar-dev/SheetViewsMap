@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "dgSpecHash": "Gcl72nCSmAA=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\e.polomar\\Desktop\\SheetViewsMap\\src\\Revit2021\\SheetViewsMap2021.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\e.polomar\\.nuget\\packages\\microsoft.netframework.referenceassemblies\\1.0.3\\microsoft.netframework.referenceassemblies.1.0.3.nupkg.sha512",
+    "C:\\Users\\e.polomar\\.nuget\\packages\\microsoft.netframework.referenceassemblies.net48\\1.0.3\\microsoft.netframework.referenceassemblies.net48.1.0.3.nupkg.sha512"
+  ],
+  "logs": []
+}

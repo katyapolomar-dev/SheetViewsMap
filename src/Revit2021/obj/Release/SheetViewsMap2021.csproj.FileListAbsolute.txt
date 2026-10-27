@@ -1,0 +1,9 @@
+C:\Users\e.polomar\Desktop\SheetViewsMap\out\2021\SheetViewsMap2021.dll
+C:\Users\e.polomar\Desktop\SheetViewsMap\out\2021\SheetViewsMap2021.pdb
+C:\Users\e.polomar\Desktop\SheetViewsMap\src\Revit2021\obj\Release\SheetViewsMap2021.csproj.AssemblyReference.cache
+C:\Users\e.polomar\Desktop\SheetViewsMap\src\Revit2021\obj\Release\SheetViewsMap2021.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\e.polomar\Desktop\SheetViewsMap\src\Revit2021\obj\Release\SheetViewsMap2021.AssemblyInfoInputs.cache
+C:\Users\e.polomar\Desktop\SheetViewsMap\src\Revit2021\obj\Release\SheetViewsMap2021.AssemblyInfo.cs
+C:\Users\e.polomar\Desktop\SheetViewsMap\src\Revit2021\obj\Release\SheetViewsMap2021.csproj.CoreCompileInputs.cache
+C:\Users\e.polomar\Desktop\SheetViewsMap\src\Revit2021\obj\Release\SheetViewsMap2021.dll
+C:\Users\e.polomar\Desktop\SheetViewsMap\src\Revit2021\obj\Release\SheetViewsMap2021.pdb
