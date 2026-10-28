@@ -920,13 +920,28 @@ namespace SheetViewsMap
             return new DataTemplate { VisualTree = panel };
         }
 
-        /// <summary>Кнопка-номер листа: прозрачная, выглядит как текст таблицы.</summary>
+        /// <summary>
+        /// Кнопка-номер листа: прозрачная, выглядит как текст таблицы.
+        /// Шаблон задаём явно (только ContentPresenter): стандартный шаблон
+        /// ToggleButton в нажатом состоянии рисует светлую подложку, на которой
+        /// номер листа перестаёт быть виден.
+        /// </summary>
         private static Style CreateChipStyle()
         {
+            var template = new ControlTemplate(typeof(ToggleButton));
+            var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
+            presenter.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            template.VisualTree = presenter;
+
             var style = new Style(typeof(ToggleButton));
+            style.Setters.Add(new Setter(ToggleButton.TemplateProperty, template));
             style.Setters.Add(new Setter(WpfControl.BackgroundProperty, Brushes.Transparent));
             style.Setters.Add(new Setter(WpfControl.BorderThicknessProperty, new Thickness(0)));
             style.Setters.Add(new Setter(WpfControl.PaddingProperty, new Thickness(0)));
+
+            // Без этого вокруг кнопки при щелчке появляется пунктирная рамка.
+            style.Setters.Add(new Setter(FrameworkElement.FocusVisualStyleProperty, null));
+
             style.Setters.Add(new Setter(FrameworkElement.CursorProperty, Cursors.Hand));
             style.Setters.Add(new Setter(TextBlock.FontSizeProperty, Theme.FontCell));
             style.Setters.Add(new Setter(TextBlock.ForegroundProperty, Theme.Text));
