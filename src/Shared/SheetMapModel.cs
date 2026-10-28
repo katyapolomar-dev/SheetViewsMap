@@ -25,6 +25,18 @@ namespace SheetViewsMap
         /// </summary>
         public string SectionIssue { get; set; }
 
+        /// <summary>Номера видов, размещённых на этом листе (без ведомостей и спецификаций).</summary>
+        public List<string> ViewNumbers { get; set; }
+
+        /// <summary>
+        /// На листе больше одного вида, поэтому лист попадает в несколько строк
+        /// таблицы: в колонке «Листы» у такого номера есть выпадающий список.
+        /// </summary>
+        public bool HasMultipleViews
+        {
+            get { return ViewNumbers != null && ViewNumbers.Count > 1; }
+        }
+
         /// <summary>
         /// Нумерация разрезов на листе нарушена: не начинается с 1, есть пропуски
         /// или лист «(окончание)» не продолжает лист «(начало)».

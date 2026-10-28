@@ -74,7 +74,8 @@ namespace SheetViewsMap
                     BaseName = name.Base,
                     IsStart = name.IsStart,
                     IsEnd = name.IsEnd,
-                    Sections = CollectSectionNumbers(doc, viewIds)
+                    Sections = CollectSectionNumbers(doc, viewIds),
+                    ViewNumbers = CollectViewNumbers(doc, viewIds)
                 });
             }
 
@@ -117,6 +118,7 @@ namespace SheetViewsMap
                         SheetId = info.Sheet.Id,
                         SetKey = info.SetKey,
                         SectionNumbers = info.Sections,
+                        ViewNumbers = info.ViewNumbers,
                         IsProblem = info.IsProblem,
                         SectionIssue = info.IsProblem ? info.Issue : null
                     });
@@ -291,6 +293,9 @@ namespace SheetViewsMap
             /// <summary>Отсортированные уникальные номера разрезов на листе.</summary>
             public List<int> Sections;
 
+            /// <summary>Номера видов на листе (для выпадающего списка в колонке «Листы»).</summary>
+            public List<string> ViewNumbers;
+
             public bool IsProblem;
             public string Issue;
         }
@@ -463,6 +468,31 @@ namespace SheetViewsMap
             }
 
             return result.ToList();
+        }
+
+        /// <summary>
+        /// Номера видов на листе (без ведомостей и спецификаций), отсортированные
+        /// «по-человечески». Показываются в выпадающем списке колонки «Листы».
+        /// </summary>
+        private static List<string> CollectViewNumbers(Document doc, IEnumerable<ElementId> viewIds)
+        {
+            var result = new List<string>();
+
+            foreach (ElementId viewId in viewIds)
+            {
+                View view = doc.GetElement(viewId) as View;
+                if (view == null || IsExcludedView(view))
+                    continue;
+
+                string number = GetViewNumber(view);
+                if (!string.IsNullOrEmpty(number))
+                    result.Add(number);
+            }
+
+            return result
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(v => v, NaturalStringComparer.Instance)
+                .ToList();
         }
 
         /// <summary>

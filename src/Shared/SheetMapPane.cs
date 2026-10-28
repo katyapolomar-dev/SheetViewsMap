@@ -18,6 +18,7 @@ using Autodesk.Revit.DB;
 // «Visibility.Collapsed» не компилируется. А Grid и Binding дополнительно
 // пересекаются с одноимёнными типами из Autodesk.Revit.DB.
 using WpfBinding = System.Windows.Data.Binding;
+using WpfControl = System.Windows.Controls.Control;
 using WpfGrid = System.Windows.Controls.Grid;
 using WpfDataGridGridLinesVisibility = System.Windows.Controls.DataGridGridLinesVisibility;
 using WpfVisibility = System.Windows.Visibility;
@@ -39,8 +40,6 @@ namespace SheetViewsMap
         private readonly TextBox _filterBox;
         private readonly TextBox _numberBox;
         private readonly ComboBox _setBox;
-        private readonly Button _problemButton;
-        private readonly Button _goodButton;
         private readonly TextBlock _status;
         private readonly TextBlock _selectionLabel;
         private readonly Button _copyButton;
@@ -60,10 +59,15 @@ namespace SheetViewsMap
 
         private const string AllSets = "Все комплекты";
 
+        /// <summary>
+        /// Команда «перейти к виду» из выпадающего списка в колонке «Листы»:
+        /// параметр — номер вида, обработчик выделяет его строку в таблице.
+        /// </summary>
+        private static readonly RoutedCommand SelectViewCommand =
+            new RoutedCommand("SelectViewFromSheetChip", typeof(SheetMapPane));
+
         /// <summary>Ширина слота под номер листа - от неё зависит выравнивание значков.</summary>
         private const double SheetNumberSlotWidth = 78;
-        private bool _problemMode;
-        private bool _goodMode;
 
         /// <summary>Пауза между листами при пролистывании, миллисекунды.</summary>
         private const int SheetStepDelayMs = 900;
@@ -78,7 +82,7 @@ namespace SheetViewsMap
             var header = new StackPanel { Margin = new Thickness(14, 12, 14, 0) };
 
             header.Children.Add(Theme.CreateText(
-                "Все номера видов и листы, на которых они размещены.",
+                "Виды с проблемной нумерацией разрезов и листы, на которых они размещены.",
                 Theme.TextMuted, Theme.FontSmall, false));
 
             var filterRow = new WpfGrid();
@@ -165,30 +169,6 @@ namespace SheetViewsMap
 
             header.Children.Add(filterRow);
 
-            // ---- две кнопки: проблемные листы / гудные ----
-            var checkRow = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Margin = new Thickness(0, 8, 0, 0)
-            };
-            checkRow.Children.Add(Theme.CreateText("Показывать:", Theme.TextStrong, Theme.FontUi, true));
-
-            _problemButton = Theme.CreateButton("Проблемные", false);
-            _problemButton.Width = 118;
-            _problemButton.Margin = new Thickness(10, 0, 8, 0);
-            _problemButton.ToolTip = "Только листы, где нумерация разрезов начинается не с 1";
-            _problemButton.Click += (s, e) => ToggleProblemFilter(true);
-
-            _goodButton = Theme.CreateButton("Гудные", false);
-            _goodButton.Width = 100;
-            _goodButton.Margin = new Thickness(0, 0, 8, 0);
-            _goodButton.ToolTip = "Только листы с корректной нумерацией разрезов";
-            _goodButton.Click += (s, e) => ToggleProblemFilter(false);
-
-            checkRow.Children.Add(_problemButton);
-            checkRow.Children.Add(_goodButton);
-            header.Children.Add(checkRow);
-
             // ---------- таблица ----------
             _grid = new DataGrid
             {
@@ -224,6 +204,9 @@ namespace SheetViewsMap
             _grid.Columns.Add(TextColumn("Название вида", "ViewName", new DataGridLength(2, DataGridLengthUnitType.Star), 190, false));
             _grid.Columns.Add(SheetsColumn(300));
             _grid.MouseDoubleClick += OnGridMouseDoubleClick;
+
+            // Выбор вида в выпадающем списке листа (см. SheetsCellTemplate).
+            _grid.CommandBindings.Add(new CommandBinding(SelectViewCommand, OnSelectViewExecute));
 
             // ---------- выбор листа (если вид размещён на нескольких листах) ----------
             _pickerTitle = new TextBlock
@@ -523,18 +506,16 @@ namespace SheetViewsMap
 
             IEnumerable<SheetMapRow> rows = _allRows;
 
+            // Окно показывает только проблемные виды: фильтра «проблемные/гудные»
+            // больше нет, это его основное поведение.
+            rows = rows.Where(r => r.IsProblem);
+
             // ---- комплект листов ----
             if (!string.IsNullOrEmpty(set) && set != AllSets)
             {
                 rows = rows.Where(r => (r.Sets ?? string.Empty)
                     .IndexOf(set, StringComparison.OrdinalIgnoreCase) >= 0);
             }
-
-            // ---- проблемные / гудные ----
-            if (_problemMode)
-                rows = rows.Where(r => r.IsProblem);
-            else if (_goodMode)
-                rows = rows.Where(r => !r.IsProblem);
 
             // Сначала точный фильтр по номеру вида, при отсутствии совпадений -
             // все номера, начинающиеся с введённого.
@@ -560,25 +541,6 @@ namespace SheetViewsMap
             // экземпляр, DataGrid не заметит изменения и не перерисуется.
             _grid.ItemsSource = new List<SheetMapRow>(_visibleRows);
             UpdateSelectionCounter();
-        }
-
-        private void ToggleProblemFilter(bool problem)
-        {
-            if (problem)
-            {
-                // Повторное нажатие снимает фильтр - так можно вернуться к общему списку.
-                _problemMode = !_problemMode;
-                _goodMode = false;
-            }
-            else
-            {
-                _goodMode = !_goodMode;
-                _problemMode = false;
-            }
-
-            Theme.SetButtonActive(_problemButton, _problemMode);
-            Theme.SetButtonActive(_goodButton, _goodMode);
-            ApplyFilter();
         }
 
         private static bool Matches(SheetMapRow row, string query)
@@ -861,7 +823,7 @@ namespace SheetViewsMap
             markStyle.Setters.Add(new Setter(TextBlock.ForegroundProperty, Theme.AccentPressed));
             markStyle.Setters.Add(new Setter(TextBlock.FontWeightProperty, FontWeights.Bold));
             markStyle.Setters.Add(new Setter(UIElement.VisibilityProperty, WpfVisibility.Collapsed));
-            markStyle.Triggers.Add(ProblemOnCheckedTrigger());
+            markStyle.Triggers.Add(ProblemOnCheckedTrigger(TextBlock.ForegroundProperty));
 
             var problemTrigger = new DataTrigger
             {
@@ -874,24 +836,45 @@ namespace SheetViewsMap
 
             item.AppendChild(mark);
 
-            var number = new FrameworkElementFactory(typeof(TextBlock));
-            number.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            // ---- номер листа: кнопка с выпадающим списком видов на листе ----
+            // Если на листе несколько видов, он появляется в нескольких строках
+            // таблицы. Щелчок по номеру листа открывает список номеров видов,
+            // размещённых на этом листе; выбор вида выделяет его строку.
+            var chip = new FrameworkElementFactory(typeof(ToggleButton));
+            chip.Name = "chip";
+            chip.SetBinding(ContentControl.ContentProperty, new WpfBinding("Number"));
+            chip.SetBinding(UIElement.IsEnabledProperty, new WpfBinding("HasMultipleViews"));
 
             // Фиксированная ширина номера: без неё каждый следующий номер
             // начинался бы с другой позиции, и значки ⚠ в разных строках
             // не совпали бы по вертикали.
-            number.SetValue(FrameworkElement.WidthProperty, SheetNumberSlotWidth);
-            number.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 0, 10, 0));
-            number.SetBinding(TextBlock.TextProperty, new WpfBinding("Number"));
+            chip.SetValue(FrameworkElement.WidthProperty, SheetNumberSlotWidth);
+            chip.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Left);
+            chip.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 0, 2, 0));
 
-            // Номер обычный светло-розовый; зелёным становится только тот,
-            // что стоит рядом со знаком ⚠ у отмеченной строки.
-            var numberStyle = new Style(typeof(TextBlock));
-            numberStyle.Setters.Add(new Setter(TextBlock.ForegroundProperty, Theme.Text));
-            numberStyle.Triggers.Add(ProblemOnCheckedTrigger());
-            number.SetValue(FrameworkElement.StyleProperty, numberStyle);
+            var chipStyle = CreateChipStyle();
+            chipStyle.Triggers.Add(ProblemOnCheckedTrigger(WpfControl.ForegroundProperty));
+            chip.SetValue(FrameworkElement.StyleProperty, chipStyle);
 
-            item.AppendChild(number);
+            item.AppendChild(chip);
+
+            // Стрелка-подсказка: видна только у листов с несколькими видами.
+            var arrow = new FrameworkElementFactory(typeof(TextBlock));
+            arrow.SetValue(TextBlock.TextProperty, "\u25BE"); // ▾
+            arrow.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            arrow.SetValue(FrameworkElement.MarginProperty, new Thickness(-4, 0, 8, 0));
+
+            var arrowStyle = new Style(typeof(TextBlock));
+            arrowStyle.Setters.Add(new Setter(TextBlock.ForegroundProperty, Theme.TextMuted));
+            arrowStyle.Setters.Add(new Setter(UIElement.VisibilityProperty, WpfVisibility.Collapsed));
+            var arrowTrigger = new DataTrigger { Binding = new WpfBinding("HasMultipleViews"), Value = true };
+            arrowTrigger.Setters.Add(new Setter(UIElement.VisibilityProperty, WpfVisibility.Visible));
+            arrowStyle.Triggers.Add(arrowTrigger);
+            arrow.SetValue(FrameworkElement.StyleProperty, arrowStyle);
+
+            item.AppendChild(arrow);
+
+            item.AppendChild(CreateViewListPopup());
 
             var itemTemplate = new DataTemplate { VisualTree = item };
 
@@ -911,6 +894,125 @@ namespace SheetViewsMap
             panel.AppendChild(items);
 
             return new DataTemplate { VisualTree = panel };
+        }
+
+        /// <summary>Кнопка-номер листа: прозрачная, выглядит как текст таблицы.</summary>
+        private static Style CreateChipStyle()
+        {
+            var style = new Style(typeof(ToggleButton));
+            style.Setters.Add(new Setter(WpfControl.BackgroundProperty, Brushes.Transparent));
+            style.Setters.Add(new Setter(WpfControl.BorderThicknessProperty, new Thickness(0)));
+            style.Setters.Add(new Setter(WpfControl.PaddingProperty, new Thickness(0)));
+            style.Setters.Add(new Setter(FrameworkElement.CursorProperty, Cursors.Hand));
+            style.Setters.Add(new Setter(TextBlock.FontSizeProperty, Theme.FontCell));
+            style.Setters.Add(new Setter(TextBlock.ForegroundProperty, Theme.Text));
+            style.Setters.Add(new Setter(HorizontalContentAlignmentProperty, HorizontalAlignment.Left));
+            style.Setters.Add(new Setter(VerticalContentAlignmentProperty, VerticalAlignment.Center));
+            return style;
+        }
+
+        /// <summary>
+        /// Выпадающий список номеров видов, размещённых на листе. Открывается
+        /// щелчком по номеру листа; выбор вида выделяет его строку в таблице
+        /// (команда SelectViewCommand, обработчик OnSelectViewExecute).
+        /// </summary>
+        private static FrameworkElementFactory CreateViewListPopup()
+        {
+            var viewButton = new FrameworkElementFactory(typeof(Button));
+            viewButton.SetValue(Button.CommandProperty, SelectViewCommand);
+            viewButton.SetBinding(Button.CommandParameterProperty, new WpfBinding());
+            viewButton.SetBinding(ContentControl.ContentProperty, new WpfBinding());
+            viewButton.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Stretch);
+            viewButton.SetValue(HorizontalContentAlignmentProperty, HorizontalAlignment.Left);
+            viewButton.SetValue(WpfControl.PaddingProperty, new Thickness(8, 3, 8, 3));
+
+            var viewButtonStyle = new Style(typeof(Button));
+            viewButtonStyle.Setters.Add(new Setter(WpfControl.BackgroundProperty, Brushes.Transparent));
+            viewButtonStyle.Setters.Add(new Setter(WpfControl.BorderThicknessProperty, new Thickness(0)));
+            viewButtonStyle.Setters.Add(new Setter(TextBlock.ForegroundProperty, Theme.Text));
+            viewButtonStyle.Setters.Add(new Setter(TextBlock.FontSizeProperty, Theme.FontCell));
+            var hover = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+            hover.Setters.Add(new Setter(WpfControl.BackgroundProperty, Theme.SurfaceAlt));
+            hover.Setters.Add(new Setter(WpfControl.ForegroundProperty, Theme.TextStrong));
+            viewButtonStyle.Triggers.Add(hover);
+            viewButton.SetValue(FrameworkElement.StyleProperty, viewButtonStyle);
+
+            var viewTemplate = new DataTemplate { VisualTree = viewButton };
+
+            var list = new FrameworkElementFactory(typeof(ItemsControl));
+            list.SetValue(ItemsControl.ItemsSourceProperty, new WpfBinding("ViewNumbers"));
+            list.SetValue(ItemsControl.ItemTemplateProperty, viewTemplate);
+            list.SetValue(FrameworkElement.MarginProperty, new Thickness(4));
+
+            var scroll = new FrameworkElementFactory(typeof(ScrollViewer));
+            scroll.SetValue(ScrollViewer.MaxHeightProperty, 240.0);
+            scroll.SetValue(ScrollViewer.VerticalScrollBarVisibilityProperty, ScrollBarVisibility.Auto);
+            scroll.AppendChild(list);
+
+            var border = new FrameworkElementFactory(typeof(Border));
+            border.SetValue(Border.BackgroundProperty, Theme.Surface);
+            border.SetValue(Border.BorderBrushProperty, Theme.BorderColor);
+            border.SetValue(Border.BorderThicknessProperty, new Thickness(1));
+            border.SetValue(Border.CornerRadiusProperty, new CornerRadius(6));
+            border.AppendChild(scroll);
+
+            var popup = new FrameworkElementFactory(typeof(Popup));
+            popup.Name = "chipPopup";
+            popup.SetValue(Popup.PlacementProperty, PlacementMode.Bottom);
+            popup.SetValue(Popup.StaysOpenProperty, false);
+            popup.SetBinding(Popup.IsOpenProperty, new WpfBinding("IsChecked")
+            {
+                ElementName = "chip",
+                Mode = BindingMode.TwoWay
+            });
+            popup.SetValue(Popup.PlacementTargetProperty, new WpfBinding { ElementName = "chip" });
+            popup.AppendChild(border);
+
+            return popup;
+        }
+
+        /// <summary>
+        /// Переход к виду из выпадающего списка: выделяем его строку в таблице
+        /// и прокручиваем к ней. Если у вида всё в порядке с нумерацией, его
+        /// строки в окне нет (окно показывает только проблемные) - сообщаем об этом.
+        /// </summary>
+        private void OnSelectViewExecute(object sender, ExecutedRoutedEventArgs e)
+        {
+            // Закрываем выпадающий список, из которого пришла команда.
+            Popup popup = FindPopupAncestor(e.OriginalSource as DependencyObject);
+            if (popup != null)
+                popup.IsOpen = false;
+
+            string viewNumber = (e.Parameter as string ?? string.Empty).Trim();
+            if (viewNumber.Length == 0)
+                return;
+
+            SheetMapRow row = _allRows.FirstOrDefault(r =>
+                string.Equals((r.ViewNumber ?? string.Empty).Trim(), viewNumber, StringComparison.OrdinalIgnoreCase));
+
+            if (row == null || !_visibleRows.Contains(row))
+            {
+                SetStatus("Вид " + viewNumber + ": нумерация разрезов в порядке — в списке проблемных его нет.");
+                return;
+            }
+
+            _grid.SelectedItem = row;
+            _grid.ScrollIntoView(row);
+            SetStatus("Вид " + viewNumber + " — " + row.ViewName);
+        }
+
+        /// <summary>Логический родитель Popup для элемента внутри его содержимого.</summary>
+        private static Popup FindPopupAncestor(DependencyObject element)
+        {
+            while (element != null)
+            {
+                if (element is Popup)
+                    return (Popup)element;
+
+                element = LogicalTreeHelper.GetParent(element);
+            }
+
+            return null;
         }
 
         /// <summary>
@@ -944,8 +1046,10 @@ namespace SheetViewsMap
         /// внутри шаблона ячейки IsProblem - это признак проблемности ЛИСТА,
         /// а признак отметки строки лежит в DataContext предка DataGridRow.
         /// AncestorLevel для FindAncestor нумеруется с единицы.
+        /// Свойство цвета передаётся параметром: у TextBlock это
+        /// TextBlock.Foreground, у кнопки-номера — Control.Foreground.
         /// </summary>
-        private static MultiDataTrigger ProblemOnCheckedTrigger()
+        private static MultiDataTrigger ProblemOnCheckedTrigger(DependencyProperty foregroundProperty)
         {
             var trigger = new MultiDataTrigger();
 
@@ -964,7 +1068,7 @@ namespace SheetViewsMap
                 Value = true
             });
 
-            trigger.Setters.Add(new Setter(TextBlock.ForegroundProperty, Theme.OnSelection));
+            trigger.Setters.Add(new Setter(foregroundProperty, Theme.OnSelection));
             return trigger;
         }
 
