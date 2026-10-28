@@ -192,8 +192,8 @@ namespace SheetViewsMap
                 Margin = new Thickness(14, 10, 14, 0)
             };
 
-            _grid.Columns.Add(SheetsColumn(300));
             _grid.Columns.Add(CheckColumn(40, 40));
+            _grid.Columns.Add(SheetsColumn(300));
             _grid.Columns.Add(TextColumn("№ вида", "ViewNumbersText", new DataGridLength(2, DataGridLengthUnitType.Star), 150, false));
             _grid.MouseDoubleClick += OnGridMouseDoubleClick;
 
