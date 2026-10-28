@@ -33,8 +33,9 @@ namespace SheetViewsMap
     }
 
     /// <summary>
-    /// Открывает один лист из очереди: запуск происходит по кнопке «Открыть лист»
-    /// и по её нажатию дальше — панель вызывает Raise() для следующего.
+    /// Открывает один элемент из очереди: лист или отдельный вид.
+    /// Запуск происходит по кнопке «Открыть лист», двойному щелчку по строке
+    /// и выбору вида в выпадающем списке колонки «Листы».
     /// RequestViewChange() выбран вместо присваивания ActiveView, потому что
     /// он как раз разрешён для вызова из ExternalEvent.
     /// </summary>
@@ -46,16 +47,16 @@ namespace SheetViewsMap
 
             try
             {
-                ElementId sheetId = Bridge.TakeNextSheetId();
+                ElementId targetId = Bridge.TakeNextSheetId();
                 UIDocument uidoc = (app == null) ? null : app.ActiveUIDocument;
 
                 if (uidoc == null || uidoc.Document == null)
                 {
                     error = "Нет открытого документа.";
                 }
-                else if (sheetId == null || sheetId == ElementId.InvalidElementId)
+                else if (targetId == null || targetId == ElementId.InvalidElementId)
                 {
-                    error = "Лист не выбран.";
+                    error = "Ничего не выбрано.";
                 }
                 else if (uidoc.Document.IsReadOnly)
                 {
@@ -63,12 +64,16 @@ namespace SheetViewsMap
                 }
                 else
                 {
-                    ViewSheet sheet = uidoc.Document.GetElement(sheetId) as ViewSheet;
+                    Element element = uidoc.Document.GetElement(targetId);
+                    ViewSheet sheet = element as ViewSheet;
+                    View view = element as View;
 
-                    if (sheet == null)
-                        error = "Лист не найден в текущем документе (возможно, открыт другой проект).";
-                    else
+                    if (sheet != null)
                         uidoc.RequestViewChange(sheet);
+                    else if (view != null)
+                        uidoc.RequestViewChange(view);
+                    else
+                        error = "Элемент не найден в текущем документе (возможно, открыт другой проект).";
                 }
             }
             catch (Exception ex)
@@ -85,7 +90,7 @@ namespace SheetViewsMap
 
         public string GetName()
         {
-            return "SheetViewsMap — открытие листа";
+            return "SheetViewsMap — открытие листа или вида";
         }
     }
 }

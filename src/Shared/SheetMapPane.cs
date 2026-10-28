@@ -45,21 +45,16 @@ namespace SheetViewsMap
         private readonly Button _copyButton;
         private readonly Button _refreshButton;
 
-        private readonly ListBox _pickerList;
-        private readonly TextBlock _pickerTitle;
-        private readonly Border _pickerPanel;
-
         // Выпадающий список проблемных видов листа (один на всё окно,
         // открывается щелчком по номеру листа в колонке «Листы»).
         private readonly Popup _viewPopup;
         private readonly ListBox _viewList;
-        private SheetRef _viewPopupRef;
+        private SheetMapRow _viewPopupRow;
 
         private readonly DispatcherTimer _timer;
 
         private readonly List<SheetMapRow> _allRows = new List<SheetMapRow>();
         private readonly List<SheetMapRow> _visibleRows = new List<SheetMapRow>();
-        private List<SheetRef> _pickerRefs = new List<SheetRef>();
 
         private bool _initialLoadRequested;
 
@@ -199,8 +194,7 @@ namespace SheetViewsMap
 
             _grid.Columns.Add(SheetsColumn(300));
             _grid.Columns.Add(CheckColumn(40, 40));
-            _grid.Columns.Add(TextColumn("№ вида", "ViewNumber", new DataGridLength(110), 90, true));
-            _grid.Columns.Add(TextColumn("Название вида", "ViewName", new DataGridLength(2, DataGridLengthUnitType.Star), 190, false));
+            _grid.Columns.Add(TextColumn("№ вида", "ViewNumbersText", new DataGridLength(2, DataGridLengthUnitType.Star), 150, false));
             _grid.MouseDoubleClick += OnGridMouseDoubleClick;
 
             // Щелчки по кнопкам-номерам листов в колонке «Листы» ловим на уровне
@@ -235,60 +229,8 @@ namespace SheetViewsMap
                 Child = viewListBorder
             };
 
-            // ---------- выбор листа (если вид размещён на нескольких листах) ----------
-            _pickerTitle = new TextBlock
-            {
-                Foreground = Theme.TextStrong,
-                FontSize = Theme.FontUi,
-                FontWeight = FontWeights.SemiBold,
-                Margin = new Thickness(12, 12, 12, 8),
-                TextWrapping = TextWrapping.Wrap
-            };
-
-            _pickerList = new ListBox
-            {
-                Style = Theme.CreateListBoxStyle(),
-                Height = 190,
-                Margin = new Thickness(12, 0, 12, 10),
-                FontSize = Theme.FontUi,
-                ItemTemplate = SheetItemTemplate()
-            };
-            _pickerList.MouseDoubleClick += (s, e) => OpenSelectedSheet();
-
-            var pickerOpen = Theme.CreateButton("Открыть лист", true);
-            pickerOpen.Width = 124;
-            pickerOpen.Margin = new Thickness(12, 0, 8, 12);
-            pickerOpen.Click += (s, e) => OpenSelectedSheet();
-
-            var pickerBack = Theme.CreateButton("Назад", false);
-            pickerBack.Width = 100;
-            pickerBack.Margin = new Thickness(0, 0, 0, 12);
-            pickerBack.Click += (s, e) => HidePicker();
-
-            var pickerButtons = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right
-            };
-            pickerButtons.Children.Add(pickerOpen);
-            pickerButtons.Children.Add(pickerBack);
-
-            var pickerStack = new StackPanel();
-            pickerStack.Children.Add(_pickerTitle);
-            pickerStack.Children.Add(_pickerList);
-            pickerStack.Children.Add(pickerButtons);
-
-            _pickerPanel = new Border
-            {
-                Visibility = WpfVisibility.Collapsed,
-                Margin = new Thickness(14, 10, 14, 0),
-                Background = Theme.Background,
-                Child = pickerStack
-            };
-
             var contentGrid = new WpfGrid();
             contentGrid.Children.Add(_grid);
-            contentGrid.Children.Add(_pickerPanel);
 
             // ---------- нижняя панель: счётчик и кнопки ----------
             _selectionLabel = Theme.CreateText("Выбрано: 0", Theme.TextStrong, Theme.FontUi, true);
@@ -459,7 +401,6 @@ namespace SheetViewsMap
             UnsubscribeRows();
 
             _allRows.Clear();
-            HidePicker();
 
             if (!string.IsNullOrEmpty(data.Error))
             {
@@ -488,7 +429,7 @@ namespace SheetViewsMap
                 : string.Empty;
 
             SetStatus(string.Format("{0} — листов: {1}, видов на листах: {2}, с проблемной нумерацией: {3}{4}",
-                data.DocumentName, data.SheetCount, data.Rows.Count, problemRows, hint));
+                data.DocumentName, data.SheetCount, data.PlacedViewCount, problemRows, hint));
         }
 
         /// <summary>
@@ -544,14 +485,16 @@ namespace SheetViewsMap
                     .IndexOf(set, StringComparison.OrdinalIgnoreCase) >= 0);
             }
 
-            // Сначала точный фильтр по номеру вида, при отсутствии совпадений -
-            // все номера, начинающиеся с введённого.
+            // Точный фильтр по номеру вида: номер должен быть среди номеров
+            // видов листа. Если точных совпадений нет - по началу номера.
             if (number.Length > 0)
             {
-                var exact = rows.Where(r => string.Equals((r.ViewNumber ?? string.Empty).Trim(), number, StringComparison.OrdinalIgnoreCase)).ToList();
+                var exact = rows.Where(r => r.ViewNumbers != null && r.ViewNumbers
+                    .Any(v => string.Equals(v.Trim(), number, StringComparison.OrdinalIgnoreCase))).ToList();
+
                 rows = exact.Count > 0
                     ? exact
-                    : rows.Where(r => (r.ViewNumber ?? string.Empty).Trim().StartsWith(number, StringComparison.OrdinalIgnoreCase));
+                    : rows.Where(r => (r.ViewNumbersText ?? string.Empty).StartsWith(number, StringComparison.OrdinalIgnoreCase));
             }
 
             if (search.Length > 0)
@@ -568,9 +511,9 @@ namespace SheetViewsMap
 
         private static bool Matches(SheetMapRow row, string query)
         {
-            return Contains(row.ViewNumber, query)
-                || Contains(row.ViewName, query)
-                || Contains(row.Sheets, query);
+            return Contains(row.Number, query)
+                || Contains(row.SheetName, query)
+                || Contains(row.ViewNumbersText, query);
         }
 
         private static bool Contains(string value, string query)
@@ -615,15 +558,14 @@ namespace SheetViewsMap
                 return;
 
             var text = new StringBuilder();
-            text.AppendLine("Листы\t№ вида\tНазвание вида");
+            text.AppendLine("Листы\t№ вида");
 
             foreach (SheetMapRow row in rows)
             {
                 text.AppendLine(string.Join("\t", new[]
                 {
-                    row.Sheets,
-                    row.ViewNumber,
-                    row.ViewName
+                    row.Number,
+                    row.ViewNumbersText
                 }));
             }
 
@@ -643,16 +585,10 @@ namespace SheetViewsMap
         private void OnGridMouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
             SheetMapRow row = _grid.SelectedItem as SheetMapRow;
-            if (row == null || row.SheetRefs == null || row.SheetRefs.Count == 0)
+            if (row == null || row.SheetId == null)
                 return;
 
-            if (row.SheetRefs.Count == 1)
-            {
-                Navigate(row.SheetRefs[0]);
-                return;
-            }
-
-            ShowPicker(row);
+            OpenSheets(new List<ElementId> { row.SheetId });
         }
 
         private void OpenSheetFromToolbar()
@@ -661,7 +597,7 @@ namespace SheetViewsMap
             // вид за раз, поэтому листы открываются по очереди - смотрите Bridge.
             // Элемент ElementId сам по себе годен как ключ: в 2021 это класс,
             // а в 2022+ структура, но Equals/GetHashCode работают в обоих случаях.
-            var targets = new List<SheetRef>();
+            var targets = new List<ElementId>();
             var used = new HashSet<ElementId>();
 
             foreach (SheetMapRow row in _visibleRows.Where(r => r.IsSelected))
@@ -684,27 +620,19 @@ namespace SheetViewsMap
             OpenSheets(targets);
         }
 
-        private static void AddSheets(SheetMapRow row, List<SheetRef> targets, HashSet<ElementId> used)
+        private static void AddSheets(SheetMapRow row, List<ElementId> targets, HashSet<ElementId> used)
         {
-            if (row.SheetRefs == null)
+            if (row == null || row.SheetId == null)
                 return;
 
-            foreach (SheetRef reference in row.SheetRefs)
-            {
-                if (reference == null || reference.SheetId == null)
-                    continue;
-
-                // Один и тот же лист может попасть в выборку из разных видов.
-                if (used.Add(reference.SheetId))
-                    targets.Add(reference);
-            }
+            // Один и тот же лист может попасть в выборку из разных строк.
+            if (used.Add(row.SheetId))
+                targets.Add(row.SheetId);
         }
 
-        private void OpenSheets(List<SheetRef> targets)
+        private void OpenSheets(List<ElementId> sheetIds)
         {
-            var ids = targets.Select(t => t.SheetId);
-
-            if (!Bridge.RequestOpenSheets(ids))
+            if (!Bridge.RequestOpenSheets(sheetIds))
             {
                 SetStatus("Revit сейчас занят — попробуйте ещё раз.", true);
                 return;
@@ -712,46 +640,13 @@ namespace SheetViewsMap
 
             _nextSheetAllowedAt = DateTime.MinValue;
 
-            if (targets.Count == 1)
-                SetStatus("Открываю лист " + targets[0].Number + "…");
+            if (sheetIds.Count == 1)
+            {
+                SheetMapRow first = _allRows.FirstOrDefault(r => r.SheetId == sheetIds[0]);
+                SetStatus(first != null ? "Открываю лист " + first.Number + "…" : "Открываю лист…");
+            }
             else
-                SetStatus("Открываю листы: " + targets.Count);
-        }
-
-        private void ShowPicker(SheetMapRow row)
-        {
-            _pickerRefs = row.SheetRefs;
-            _pickerTitle.Text = string.Format(
-                "Вид {0} — {1}{2}Размещён на {3} листах. Выберите нужный:",
-                row.ViewNumber, row.ViewName, Environment.NewLine, row.SheetRefs.Count);
-
-            _pickerList.ItemsSource = _pickerRefs;
-            _pickerList.SelectedIndex = 0;
-
-            _pickerPanel.Visibility = WpfVisibility.Visible;
-            _grid.Visibility = WpfVisibility.Collapsed;
-        }
-
-        private void HidePicker()
-        {
-            _pickerPanel.Visibility = WpfVisibility.Collapsed;
-            _grid.Visibility = WpfVisibility.Visible;
-        }
-
-        private void OpenSelectedSheet()
-        {
-            int index = _pickerList.SelectedIndex;
-            if (index < 0 || index >= _pickerRefs.Count)
-                return;
-
-            SheetRef target = _pickerRefs[index];
-            HidePicker();
-            Navigate(target);
-        }
-
-        private void Navigate(SheetRef target)
-        {
-            OpenSheets(new List<SheetRef> { target });
+                SetStatus("Открываю листы: " + sheetIds.Count);
         }
 
         // ------------------------------------------------------------------ мелочи
@@ -900,22 +795,11 @@ namespace SheetViewsMap
 
             item.AppendChild(chip);
 
-            var itemTemplate = new DataTemplate { VisualTree = item };
-
-            // Панель элементов: без неё ItemsControl выстраивает номера в столбик.
-            var itemsPanel = new FrameworkElementFactory(typeof(StackPanel));
-            itemsPanel.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
-
-            var items = new FrameworkElementFactory(typeof(ItemsControl));
-            items.SetValue(ItemsControl.ItemsSourceProperty, new WpfBinding("SheetRefs"));
-            items.SetValue(ItemsControl.ItemTemplateProperty, itemTemplate);
-            items.SetValue(ItemsControl.ItemsPanelProperty, new ItemsPanelTemplate(itemsPanel));
-
             var panel = new FrameworkElementFactory(typeof(StackPanel));
             panel.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
             panel.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
             panel.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
-            panel.AppendChild(items);
+            panel.AppendChild(item);
 
             return new DataTemplate { VisualTree = panel };
         }
@@ -962,7 +846,7 @@ namespace SheetViewsMap
 
         /// <summary>
         /// Щелчок по номеру листа в колонке «Листы». Открывает (или закрывает)
-        /// выпадающий список проблемных видов этого листа.
+        /// выпадающий список номеров видов этого листа.
         /// </summary>
         private void OnChipClick(object sender, RoutedEventArgs e)
         {
@@ -970,21 +854,21 @@ namespace SheetViewsMap
             if (chip == null)
                 return;
 
-            var reference = chip.DataContext as SheetRef;
-            if (reference == null || !reference.HasMultipleViews)
+            var row = chip.DataContext as SheetMapRow;
+            if (row == null || !row.HasMultipleViews)
                 return;
 
             // Повторный щелчок по тому же номеру закрывает список.
-            if (_viewPopup.IsOpen && _viewPopupRef == reference)
+            if (_viewPopup.IsOpen && _viewPopupRow == row)
             {
                 CloseViewPopup();
                 return;
             }
 
-            _viewList.ItemsSource = reference.ViewNumbers;
+            _viewList.ItemsSource = row.ViewNumbers;
             _viewList.SelectedIndex = -1;
             _viewPopup.PlacementTarget = chip;
-            _viewPopupRef = reference;
+            _viewPopupRow = row;
             _viewPopup.IsOpen = true;
         }
 
@@ -992,33 +876,35 @@ namespace SheetViewsMap
         {
             _viewPopup.IsOpen = false;
             _viewList.ItemsSource = null;
-            _viewPopupRef = null;
+            _viewPopupRow = null;
         }
 
         /// <summary>
-        /// Выбор вида в выпадающем списке: выделяем его строку в таблице
-        /// и прокручиваем к ней.
+        /// Выбор вида в выпадающем списке: открываем этот вид в Revit.
         /// </summary>
         private void OnViewListSelected(object sender, SelectionChangedEventArgs e)
         {
-            string viewNumber = _viewList.SelectedItem as string;
-            if (viewNumber == null)
+            int index = _viewList.SelectedIndex;
+            if (index < 0 || _viewPopupRow == null ||
+                index >= _viewPopupRow.ViewNumbers.Count ||
+                index >= _viewPopupRow.ViewIds.Count)
                 return;
 
+            string viewNumber = _viewPopupRow.ViewNumbers[index];
+            ElementId viewId = _viewPopupRow.ViewIds[index];
             CloseViewPopup();
 
-            SheetMapRow row = _allRows.FirstOrDefault(r =>
-                string.Equals((r.ViewNumber ?? string.Empty).Trim(), viewNumber.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (viewId == null)
+                return;
 
-            if (row == null || !_visibleRows.Contains(row))
+            if (!Bridge.RequestOpenSheets(new[] { viewId }))
             {
-                SetStatus("Вид " + viewNumber + ": нумерация разрезов в порядке — в списке проблемных его нет.");
+                SetStatus("Revit сейчас занят — попробуйте ещё раз.", true);
                 return;
             }
 
-            _grid.SelectedItem = row;
-            _grid.ScrollIntoView(row);
-            SetStatus("Вид " + viewNumber + " — " + row.ViewName);
+            _nextSheetAllowedAt = DateTime.MinValue;
+            SetStatus("Открываю вид " + viewNumber + "…");
         }
 
         /// <summary>
@@ -1076,36 +962,6 @@ namespace SheetViewsMap
 
             trigger.Setters.Add(new Setter(foregroundProperty, Theme.OnSelection));
             return trigger;
-        }
-
-        /// <summary>
-        /// Разметка элемента списка листов: номер розовым, название светлым.
-        /// </summary>
-        private static DataTemplate SheetItemTemplate()
-        {
-            var row = new FrameworkElementFactory(typeof(StackPanel));
-            row.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
-            // Подсказка с причиной проблемы - как в колонке «Листы».
-            row.SetValue(FrameworkElement.ToolTipProperty, new WpfBinding("SectionIssue"));
-
-            var number = new FrameworkElementFactory(typeof(TextBlock));
-            number.SetValue(TextBlock.ForegroundProperty, Theme.Accent);
-            number.SetValue(TextBlock.FontWeightProperty, FontWeights.SemiBold);
-            number.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 0, 10, 0));
-            number.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
-            number.SetBinding(TextBlock.TextProperty, new WpfBinding("Number"));
-            row.AppendChild(number);
-
-            var title = new FrameworkElementFactory(typeof(TextBlock));
-            title.SetValue(TextBlock.ForegroundProperty, Theme.Text);
-            title.SetValue(FrameworkElement.MarginProperty, new Thickness(0));
-            title.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
-            title.SetBinding(TextBlock.TextProperty, new WpfBinding("Name"));
-            row.AppendChild(title);
-
-            var template = new DataTemplate { VisualTree = row };
-            template.Seal();
-            return template;
         }
     }
 }

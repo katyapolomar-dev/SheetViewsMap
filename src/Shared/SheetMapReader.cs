@@ -66,6 +66,10 @@ namespace SheetViewsMap
                 // sheet.Name у листа — это «Название листа» (без номера листа).
                 SheetNameParts name = ParseSheetName(sheet.Name);
 
+                List<string> viewNumbers;
+                List<ElementId> viewIdsOrdered;
+                CollectViews(doc, viewIds, out viewNumbers, out viewIdsOrdered);
+
                 infos.Add(new SheetInfo
                 {
                     Sheet = sheet,
@@ -75,7 +79,8 @@ namespace SheetViewsMap
                     IsStart = name.IsStart,
                     IsEnd = name.IsEnd,
                     Sections = CollectSectionNumbers(doc, viewIds),
-                    ViewNumbers = CollectViewNumbers(doc, viewIds)
+                    ViewNumbers = viewNumbers,
+                    ViewIdsOrdered = viewIdsOrdered
                 });
             }
 
@@ -83,138 +88,30 @@ namespace SheetViewsMap
             // и обычные листы.
             MarkSectionProblems(infos);
 
-            // Проход 3: строим строки таблицы.
-            var rowsByView = new Dictionary<ElementId, SheetMapRow>();
-
-            foreach (SheetInfo info in infos)
-            {
-                foreach (ElementId viewId in info.ViewIds)
+            // Проход 3: строка таблицы — проблемный ЛИСТ (а не вид). Номера
+            // видов листа видны в выпадающем списке колонки «Листы», клик по
+            // номеру вида открывает этот вид в Revit.
+            data.Rows = infos
+                .Where(i => i.IsProblem)
+                .OrderBy(i => SafeSheetNumber(i.Sheet), NaturalStringComparer.Instance)
+                .Select(i => new SheetMapRow
                 {
-                    View view = doc.GetElement(viewId) as View;
-                    if (view == null)
-                        continue;
-
-                    // Ведомость изменений и спецификации в таблице не нужны.
-                    if (IsExcludedView(view))
-                        continue;
-
-                    SheetMapRow row;
-                    if (!rowsByView.TryGetValue(viewId, out row))
-                    {
-                        row = new SheetMapRow
-                        {
-                            ViewId = viewId,
-                            ViewNumber = GetViewNumber(view),
-                            ViewName = view.Name,
-                            SheetRefs = new List<SheetRef>()
-                        };
-                        rowsByView.Add(viewId, row);
-                    }
-
-                    row.SheetRefs.Add(new SheetRef
-                    {
-                        Number = SafeSheetNumber(info.Sheet),
-                        Name = info.Sheet.Name,
-                        SheetId = info.Sheet.Id,
-                        SetKey = info.SetKey,
-                        SectionNumbers = info.Sections,
-                        ViewNumbers = info.ViewNumbers,
-                        IsProblem = info.IsProblem,
-                        SectionIssue = info.IsProblem ? info.Issue : null
-                    });
-                }
-            }
-
-            List<SheetMapRow> rows = rowsByView.Values.ToList();
-
-            foreach (SheetMapRow row in rows)
-            {
-                // Убираем повторы по номеру листа. Столбец «Листы» выводит
-                // именно SheetRefs, поэтому чистить надо здесь - иначе один
-                // и тот же номер печатается в ячейке несколько раз.
-                row.SheetRefs = row.SheetRefs
-                    .GroupBy(s => s.Number, StringComparer.OrdinalIgnoreCase)
-                    .Select(g => MergeSheetRefs(g))
-                    .OrderBy(s => s.Number, NaturalStringComparer.Instance)
-                    .ToList();
-
-                row.Sheets = string.Join("; ", row.SheetRefs
-                    .Select(s => s.IsProblem ? s.Number + " \u26A0" : s.Number));
-
-                row.SheetCount = row.SheetRefs.Count;
-                row.IsProblem = row.SheetRefs.Any(s => s.IsProblem);
-                row.Sets = string.Join("; ", row.SheetRefs
-                    .Select(s => s.SetKey)
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .OrderBy(s => s, StringComparer.OrdinalIgnoreCase));
-            }
-
-            data.Rows = rows
-                .OrderBy(r => r.ViewNumber, NaturalStringComparer.Instance)
+                    Number = SafeSheetNumber(i.Sheet),
+                    SheetName = i.Sheet.Name,
+                    SheetId = i.Sheet.Id,
+                    Sets = i.SetKey,
+                    ViewNumbers = i.ViewNumbers,
+                    ViewIds = i.ViewIdsOrdered,
+                    ViewNumbersText = string.Join(", ", i.ViewNumbers),
+                    SectionIssue = i.IsProblem ? i.Issue : null,
+                    IsProblem = true
+                })
                 .ToList();
+
             data.SheetCount = sheets.Count;
-
-            // Для выпадающего списка у номера листа: оставляем только ПРОБЛЕМНЫЕ
-            // номера видов этого листа. Если проблемный вид один (сама строка),
-            // список пуст и стрелка у номера листа не показывается.
-            var problemViewsBySheet = new Dictionary<ElementId, HashSet<string>>();
-
-            foreach (SheetMapRow row in rows)
-            {
-                if (!row.IsProblem)
-                    continue;
-
-                string number = (row.ViewNumber ?? string.Empty).Trim();
-                if (number.Length == 0)
-                    continue;
-
-                foreach (SheetRef reference in row.SheetRefs)
-                {
-                    if (reference.SheetId == null)
-                        continue;
-
-                    HashSet<string> set;
-                    if (!problemViewsBySheet.TryGetValue(reference.SheetId, out set))
-                    {
-                        set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                        problemViewsBySheet.Add(reference.SheetId, set);
-                    }
-
-                    set.Add(number);
-                }
-            }
-
-            foreach (SheetMapRow row in rows)
-            {
-                foreach (SheetRef reference in row.SheetRefs)
-                {
-                    HashSet<string> set;
-                    reference.ViewNumbers = problemViewsBySheet.TryGetValue(reference.SheetId, out set)
-                        ? set.OrderBy(v => v, NaturalStringComparer.Instance).ToList()
-                        : new List<string>();
-                }
-            }
+            data.PlacedViewCount = infos.Sum(i => i.ViewIds.Count);
 
             return data;
-        }
-
-        /// <summary>
-        /// Схлопывает листы с одинаковым номером в один. Если хоть один из них
-        /// проблемный - помечаем номер знаком ⚠ и переносим причину.
-        /// </summary>
-        private static SheetRef MergeSheetRefs(IEnumerable<SheetRef> group)
-        {
-            var list = group.ToList();
-            SheetRef first = list[0];
-
-            if (!first.IsProblem && list.Any(s => s.IsProblem))
-            {
-                first.IsProblem = true;
-                if (string.IsNullOrEmpty(first.SectionIssue))
-                    first.SectionIssue = list.First(s => s.IsProblem).SectionIssue;
-            }
-
-            return first;
         }
 
         /// <summary>
@@ -336,6 +233,9 @@ namespace SheetViewsMap
 
             /// <summary>Номера видов на листе (для выпадающего списка в колонке «Листы»).</summary>
             public List<string> ViewNumbers;
+
+            /// <summary>Идентификаторы видов — параллельно ViewNumbers.</summary>
+            public List<ElementId> ViewIdsOrdered;
 
             public bool IsProblem;
             public string Issue;
@@ -512,12 +412,14 @@ namespace SheetViewsMap
         }
 
         /// <summary>
-        /// Номера видов на листе (без ведомостей и спецификаций), отсортированные
-        /// «по-человечески». Показываются в выпадающем списке колонки «Листы».
+        /// Виды на листе (без ведомостей и спецификаций): номера и их
+        /// идентификаторы, отсортированные «по-человечески». Номера показываются
+        /// в выпадающем списке колонки «Листы», по идентификатору вид
+        /// открывается в Revit.
         /// </summary>
-        private static List<string> CollectViewNumbers(Document doc, IEnumerable<ElementId> viewIds)
+        private static void CollectViews(Document doc, IEnumerable<ElementId> viewIds, out List<string> numbers, out List<ElementId> ids)
         {
-            var result = new List<string>();
+            var entries = new List<ViewEntry>();
 
             foreach (ElementId viewId in viewIds)
             {
@@ -526,14 +428,32 @@ namespace SheetViewsMap
                     continue;
 
                 string number = GetViewNumber(view);
-                if (!string.IsNullOrEmpty(number))
-                    result.Add(number);
+                if (string.IsNullOrEmpty(number))
+                    continue;
+
+                entries.Add(new ViewEntry { Number = number, Id = viewId });
             }
 
-            return result
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(v => v, NaturalStringComparer.Instance)
+            List<ViewEntry> ordered = entries
+                .OrderBy(e => e.Number, NaturalStringComparer.Instance)
                 .ToList();
+
+            // Повторяющийся номер вида оставляем один раз (с первым id).
+            numbers = ordered
+                .GroupBy(e => e.Number, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.First().Number)
+                .ToList();
+
+            ids = ordered
+                .GroupBy(e => e.Number, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.First().Id)
+                .ToList();
+        }
+
+        private sealed class ViewEntry
+        {
+            public string Number;
+            public ElementId Id;
         }
 
         /// <summary>
