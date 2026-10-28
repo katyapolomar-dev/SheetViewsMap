@@ -154,6 +154,47 @@ namespace SheetViewsMap
                 .ToList();
             data.SheetCount = sheets.Count;
 
+            // Для выпадающего списка у номера листа: оставляем только ПРОБЛЕМНЫЕ
+            // номера видов этого листа. Если проблемный вид один (сама строка),
+            // список пуст и стрелка у номера листа не показывается.
+            var problemViewsBySheet = new Dictionary<ElementId, HashSet<string>>();
+
+            foreach (SheetMapRow row in rows)
+            {
+                if (!row.IsProblem)
+                    continue;
+
+                string number = (row.ViewNumber ?? string.Empty).Trim();
+                if (number.Length == 0)
+                    continue;
+
+                foreach (SheetRef reference in row.SheetRefs)
+                {
+                    if (reference.SheetId == null)
+                        continue;
+
+                    HashSet<string> set;
+                    if (!problemViewsBySheet.TryGetValue(reference.SheetId, out set))
+                    {
+                        set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                        problemViewsBySheet.Add(reference.SheetId, set);
+                    }
+
+                    set.Add(number);
+                }
+            }
+
+            foreach (SheetMapRow row in rows)
+            {
+                foreach (SheetRef reference in row.SheetRefs)
+                {
+                    HashSet<string> set;
+                    reference.ViewNumbers = problemViewsBySheet.TryGetValue(reference.SheetId, out set)
+                        ? set.OrderBy(v => v, NaturalStringComparer.Instance).ToList()
+                        : new List<string>();
+                }
+            }
+
             return data;
         }
 

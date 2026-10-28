@@ -52,9 +52,6 @@ namespace SheetViewsMap
     /// </summary>
     public sealed class SheetMapRow : INotifyPropertyChanged
     {
-        /// <summary>Порядковый номер строки в таблице. Заполняется при отрисовке.</summary>
-        public string Number { get; set; }
-
         public string ViewNumber { get; set; }
         public string ViewName { get; set; }
         public string Sheets { get; set; }
