@@ -1,0 +1,6 @@
+# Build artifacts
+[Bb]in/
+[Oo]bj/
+out/
+.vs/
+*.user
