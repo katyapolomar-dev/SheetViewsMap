@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 
@@ -46,7 +47,10 @@ namespace SheetViewsMap
             // поэтому собираем их отдельно и добавляем к списку видов листа.
             Dictionary<ElementId, List<ElementId>> schedulesBySheet = CollectSchedules(doc);
 
-            var rowsByView = new Dictionary<ElementId, SheetMapRow>();
+            // Проход 1: собираем по каждому листу виды, комплект и номера разрезов.
+            // Сразу проверить нельзя: листу «(окончание)» нужно знать, сколько
+            // разрезов на парном листе «(начало)».
+            var infos = new List<SheetInfo>();
 
             foreach (ViewSheet sheet in sheets)
             {
@@ -59,11 +63,31 @@ namespace SheetViewsMap
                         viewIds.Add(scheduleId);
                 }
 
-                // Сначала разбираем лист целиком: комплект и проверка нумерации разрезов.
-                string setKey = GetSetKey(sheet);
-                int sectionStart = FindSectionStart(doc, viewIds);
+                // sheet.Name у листа — это «Название листа» (без номера листа).
+                SheetNameParts name = ParseSheetName(sheet.Name);
 
-                foreach (ElementId viewId in viewIds)
+                infos.Add(new SheetInfo
+                {
+                    Sheet = sheet,
+                    ViewIds = viewIds,
+                    SetKey = GetSetKey(sheet),
+                    BaseName = name.Base,
+                    IsStart = name.IsStart,
+                    IsEnd = name.IsEnd,
+                    Sections = CollectSectionNumbers(doc, viewIds)
+                });
+            }
+
+            // Проход 2: проверяем нумерацию разрезов - пары «(начало)/(окончание)»
+            // и обычные листы.
+            MarkSectionProblems(infos);
+
+            // Проход 3: строим строки таблицы.
+            var rowsByView = new Dictionary<ElementId, SheetMapRow>();
+
+            foreach (SheetInfo info in infos)
+            {
+                foreach (ElementId viewId in info.ViewIds)
                 {
                     View view = doc.GetElement(viewId) as View;
                     if (view == null)
@@ -88,14 +112,13 @@ namespace SheetViewsMap
 
                     row.SheetRefs.Add(new SheetRef
                     {
-                        Number = SafeSheetNumber(sheet),
-                        Name = sheet.Name,
-                        SheetId = sheet.Id,
-                        SetKey = setKey,
-                        SectionStart = sectionStart,
-
-                        // Разрезы на листе есть, но начинаются не с единицы.
-                        IsProblem = sectionStart > 0 && sectionStart != 1
+                        Number = SafeSheetNumber(info.Sheet),
+                        Name = info.Sheet.Name,
+                        SheetId = info.Sheet.Id,
+                        SetKey = info.SetKey,
+                        SectionNumbers = info.Sections,
+                        IsProblem = info.IsProblem,
+                        SectionIssue = info.IsProblem ? info.Issue : null
                     });
                 }
             }
@@ -134,7 +157,7 @@ namespace SheetViewsMap
 
         /// <summary>
         /// Схлопывает листы с одинаковым номером в один. Если хоть один из них
-        /// проблемный - помечаем номер знаком ⚠.
+        /// проблемный - помечаем номер знаком ⚠ и переносим причину.
         /// </summary>
         private static SheetRef MergeSheetRefs(IEnumerable<SheetRef> group)
         {
@@ -142,7 +165,11 @@ namespace SheetViewsMap
             SheetRef first = list[0];
 
             if (!first.IsProblem && list.Any(s => s.IsProblem))
+            {
                 first.IsProblem = true;
+                if (string.IsNullOrEmpty(first.SectionIssue))
+                    first.SectionIssue = list.First(s => s.IsProblem).SectionIssue;
+            }
 
             return first;
         }
@@ -248,12 +275,181 @@ namespace SheetViewsMap
         }
 
         /// <summary>
-        /// С какого номера начинаются разрезы (ViewType.Section) на листе.
-        /// Возвращает 0, если разрезов на листе нет.
+        /// Всё, что нужно о листе для построения таблицы и проверки разрезов.
         /// </summary>
-        private static int FindSectionStart(Document doc, IEnumerable<ElementId> viewIds)
+        private sealed class SheetInfo
         {
-            int result = 0;
+            public ViewSheet Sheet;
+            public HashSet<ElementId> ViewIds;
+            public string SetKey;
+
+            /// <summary>Название листа без суффикса «(начало)/(окончание)».</summary>
+            public string BaseName;
+            public bool IsStart;
+            public bool IsEnd;
+
+            /// <summary>Отсортированные уникальные номера разрезов на листе.</summary>
+            public List<int> Sections;
+
+            public bool IsProblem;
+            public string Issue;
+        }
+
+        private sealed class SheetNameParts
+        {
+            public string Base;
+            public bool IsStart;
+            public bool IsEnd;
+        }
+
+        /// <summary>
+        /// Парные листы распознаём по суффиксу названия: «Трубопровод … (начало)»
+        /// и «Трубопровод … (окончание)». Регистр и лишние пробелы не важны.
+        /// </summary>
+        private static readonly Regex PairedSheetNameRegex = new Regex(
+            @"^\s*(?<base>.+?)\s*\(\s*(?<kind>начало|окончание)\s*\)\s*$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        private static SheetNameParts ParseSheetName(string sheetName)
+        {
+            var result = new SheetNameParts { Base = sheetName ?? string.Empty };
+
+            if (string.IsNullOrEmpty(sheetName))
+                return result;
+
+            Match match = PairedSheetNameRegex.Match(sheetName);
+            if (!match.Success)
+                return result;
+
+            string baseName = match.Groups["base"].Value.Trim();
+            if (baseName.Length == 0)
+                return result;
+
+            result.Base = baseName;
+            result.IsStart = string.Equals(match.Groups["kind"].Value, "начало", StringComparison.OrdinalIgnoreCase);
+            result.IsEnd = string.Equals(match.Groups["kind"].Value, "окончание", StringComparison.OrdinalIgnoreCase);
+            return result;
+        }
+
+        /// <summary>
+        /// Проверяет нумерацию разрезов и заполняет IsProblem/Issue у каждого листа.
+        ///
+        /// Правила:
+        /// - обычный лист и лист «(начало)»: разрезы начинаются с 1 и идут
+        ///   по порядку без пропусков;
+        /// - лист «(окончание)» продолжает одноимённый лист «(начало)»:
+        ///   первый номер должен быть на единицу больше, чем число разрезов
+        ///   на «(начало)», и дальше по порядку.
+        /// </summary>
+        private static void MarkSectionProblems(List<SheetInfo> infos)
+        {
+            // Группируем парные листы по базовому имени; остальные проверяем сразу.
+            var pairs = new Dictionary<string, List<SheetInfo>>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (SheetInfo info in infos)
+            {
+                if (!info.IsStart && !info.IsEnd)
+                {
+                    MarkFromOne(info); // обычный лист
+                    continue;
+                }
+
+                List<SheetInfo> group;
+                if (!pairs.TryGetValue(info.BaseName, out group))
+                {
+                    group = new List<SheetInfo>();
+                    pairs.Add(info.BaseName, group);
+                }
+
+                group.Add(info);
+            }
+
+            foreach (List<SheetInfo> group in pairs.Values)
+            {
+                List<SheetInfo> starts = group.Where(s => s.IsStart).ToList();
+                List<SheetInfo> ends = group.Where(s => s.IsEnd).ToList();
+
+                foreach (SheetInfo start in starts)
+                    MarkFromOne(start);
+
+                // Лист «(окончание)» продолжает разрезы листа(ов) «(начало)».
+                int startCount = starts.Sum(s => s.Sections.Count);
+
+                foreach (SheetInfo end in ends)
+                {
+                    if (starts.Count > 0)
+                        MarkContinuation(end, startCount);
+                    else
+                        MarkFromOne(end); // «окончание» без «начала» проверяем как обычный лист
+                }
+            }
+        }
+
+        private static void MarkFromOne(SheetInfo info)
+        {
+            info.Issue = CheckSectionSequence(info.Sections, 1, false);
+            info.IsProblem = info.Issue != null;
+        }
+
+        private static void MarkContinuation(SheetInfo info, int startCount)
+        {
+            info.Issue = CheckSectionSequence(info.Sections, startCount + 1, true);
+            info.IsProblem = info.Issue != null;
+        }
+
+        /// <summary>
+        /// Возвращает описание нарушения или null, если порядок правильный:
+        /// номера начинаются с expectedFirst и идут без пропусков.
+        /// </summary>
+        private static string CheckSectionSequence(List<int> numbers, int expectedFirst, bool continuation)
+        {
+            if (numbers == null || numbers.Count == 0)
+                return null;
+
+            var issues = new List<string>();
+
+            if (numbers[0] != expectedFirst)
+            {
+                issues.Add(continuation
+                    ? "лист должен продолжать «начало»: разрезы должны начинаться с " + expectedFirst
+                      + ", а начинаются с " + numbers[0]
+                    : "разрезы должны начинаться с " + expectedFirst
+                      + ", а начинаются с " + numbers[0]);
+            }
+
+            // Пропуски внутри диапазона от фактического первого номера до максимума.
+            var present = new HashSet<int>(numbers);
+            var missing = new List<int>();
+
+            for (int n = numbers[0] + 1; n < numbers[numbers.Count - 1]; n++)
+            {
+                if (!present.Contains(n))
+                    missing.Add(n);
+            }
+
+            if (missing.Count == 1)
+                issues.Add("пропущен номер " + missing[0]);
+            else if (missing.Count > 1)
+                issues.Add("пропущены номера: " + JoinLimited(missing));
+
+            return issues.Count == 0 ? null : string.Join("; ", issues);
+        }
+
+        /// <summary>Склеивает числа через запятую, не более шести — дальше «…».</summary>
+        private static string JoinLimited(List<int> values)
+        {
+            const int maxShown = 6;
+            string head = string.Join(", ", values.Take(maxShown));
+            return values.Count > maxShown ? head + " …" : head;
+        }
+
+        /// <summary>
+        /// Номера всех разрезов (ViewType.Section), размещённых на листе:
+        /// отсортированный список без повторов.
+        /// </summary>
+        private static List<int> CollectSectionNumbers(Document doc, IEnumerable<ElementId> viewIds)
+        {
+            var result = new SortedSet<int>();
 
             foreach (ElementId viewId in viewIds)
             {
@@ -262,11 +458,11 @@ namespace SheetViewsMap
                     continue;
 
                 int number = ParseTrailingNumber(GetViewNumber(view));
-                if (number > 0 && (result == 0 || number < result))
-                    result = number;
+                if (number > 0)
+                    result.Add(number);
             }
 
-            return result;
+            return result.ToList();
         }
 
         /// <summary>

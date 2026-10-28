@@ -845,6 +845,9 @@ namespace SheetViewsMap
             item.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
             item.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 0, 14, 0));
             item.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            // Причина проблемы показывается в подсказке при наведении на номер
+            // листа. SectionIssue равен null у правильных листов - подсказки нет.
+            item.SetValue(FrameworkElement.ToolTipProperty, new WpfBinding("SectionIssue"));
 
             var mark = new FrameworkElementFactory(typeof(TextBlock));
             mark.SetValue(FrameworkElement.WidthProperty, 14.0);
@@ -972,6 +975,8 @@ namespace SheetViewsMap
         {
             var row = new FrameworkElementFactory(typeof(StackPanel));
             row.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+            // Подсказка с причиной проблемы - как в колонке «Листы».
+            row.SetValue(FrameworkElement.ToolTipProperty, new WpfBinding("SectionIssue"));
 
             var number = new FrameworkElementFactory(typeof(TextBlock));
             number.SetValue(TextBlock.ForegroundProperty, Theme.Accent);

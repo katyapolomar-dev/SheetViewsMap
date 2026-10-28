@@ -1,10 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    РџСЂРѕРµРєС‚ РґР»СЏ РѕРґРЅРѕР№ РІРµСЂСЃРёРё Revit.
-    РСЃС…РѕРґРЅРёРєРё РѕР±С‰РёРµ РґР»СЏ РІСЃРµС… РІРµСЂСЃРёР№ Рё Р»РµР¶Р°С‚ РІ РїР°РїРєРµ src\Shared.
-    Р’РµСЂСЃРёСЏ Revit Р·Р°РґР°С‘С‚СЃСЏ РїСЂРё СЃР±РѕСЂРєРµ: dotnet build ... -p:RevitVersion=2021
-    (РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ 2023)
+    Проект для одной версии Revit.
+    Исходники общие для всех версий и лежат в папке src\Shared.
+    Версия Revit задаётся при сборке: dotnet build ... -p:RevitVersion=2025
   -->
 
   <PropertyGroup>
@@ -25,39 +24,51 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <RevitVersion Condition="'$(RevitVersion)' == ''">2023</RevitVersion>
+    <RevitVersion Condition="'$(RevitVersion)' == ''">2025</RevitVersion>
     <RevitDir>$(ProgramFiles)\Autodesk\Revit $(RevitVersion)\</RevitDir>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- РћР±С‰РёР№ РєРѕРґ: РїРѕРґРєР»СЋС‡Р°РµРј С‚Рµ Р¶Рµ СЃР°РјС‹Рµ С„Р°Р№Р»С‹, С‡С‚Рѕ Рё РІ РїСЂРѕРµРєС‚Рµ РґР»СЏ РґСЂСѓРіРѕР№ РІРµСЂСЃРёРё. -->
+    <!-- Общий код: подключаем те же самые файлы, что и в проекте для другой версии. -->
     <Compile Include="..\Shared\**\*.cs" LinkBase="Shared" />
   </ItemGroup>
 
   <ItemGroup>
     <!--
-      РџР°РєРµС‚ РЅСѓР¶РµРЅ, С‡С‚РѕР±С‹ СЃР±РѕСЂРєР° .NET Framework 4.8 СЂР°Р±РѕС‚Р°Р»Р° Р±РµР· Visual Studio
-      (dotnet build СЃР°Рј СЃРєР°С‡Р°РµС‚ СЌС‚Р°Р»РѕРЅРЅС‹Рµ СЃР±РѕСЂРєРё .NET Framework).
+      Пакет нужен, чтобы сборка .NET Framework 4.8 работала без Visual Studio
+      (dotnet build сам скачает эталонные сборки .NET Framework).
     -->
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
     <!--
-      РЎСЃС‹Р»РєРё РЅР° API Revit Р±РµСЂС‘Рј РёР· СѓСЃС‚Р°РЅРѕРІР»РµРЅРЅРѕРіРѕ Revit.
-      Private=false РѕР±СЏР·Р°С‚РµР»СЊРЅРѕ: DLL Revit РєРѕРїРёСЂРѕРІР°С‚СЊ РІ РІС‹С…РѕРґРЅСѓСЋ РїР°РїРєСѓ РЅРµР»СЊР·СЏ,
-      РёРЅР°С‡Рµ Revit Р·Р°РіСЂСѓР·РёС‚ РЅРµ С‚Сѓ СЃР±РѕСЂРєСѓ.
+      Эталонные сборки Revit 2025 для сборки без установленного Revit 2025.
+      Файлы пакета сами по себе не подключаются (ExcludeAssets="all"): пути
+      к DLL берутся через свойство PkgRevit_All_Main_Versions_API_x64 ниже.
+    -->
+    <PackageReference Include="Revit_All_Main_Versions_API_x64" Version="2025.0.0" PrivateAssets="all" ExcludeAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Ссылки на API Revit: сначала из установленного Revit, если он есть,
+      иначе - из NuGet-пакета выше.
+      Private=false обязательно: DLL Revit копировать в выходную папку нельзя,
+      иначе Revit загрузит не ту сборку.
     -->
     <Reference Include="RevitAPI">
-      <HintPath>$(RevitDir)RevitAPI.dll</HintPath>
+      <HintPath Condition="Exists('$(RevitDir)RevitAPI.dll')">$(RevitDir)RevitAPI.dll</HintPath>
+      <HintPath Condition="!Exists('$(RevitDir)RevitAPI.dll') and Exists('$(PkgRevit_All_Main_Versions_API_x64)\lib\net8.0\RevitAPI.dll')">$(PkgRevit_All_Main_Versions_API_x64)\lib\net8.0\RevitAPI.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="RevitAPIUI">
-      <HintPath>$(RevitDir)RevitAPIUI.dll</HintPath>
+      <HintPath Condition="Exists('$(RevitDir)RevitAPIUI.dll')">$(RevitDir)RevitAPIUI.dll</HintPath>
+      <HintPath Condition="!Exists('$(RevitDir)RevitAPIUI.dll') and Exists('$(PkgRevit_All_Main_Versions_API_x64)\lib\net8.0\RevitAPIUI.dll')">$(PkgRevit_All_Main_Versions_API_x64)\lib\net8.0\RevitAPIUI.dll</HintPath>
       <Private>false</Private>
     </Reference>
 
-    <!-- WPF: РїР°РЅРµР»СЊ РїРѕСЃС‚СЂРѕРµРЅР° РЅР° XAML-РєРѕРЅС‚СЂРѕР»Р°С…, СЃРѕР±РёСЂР°РµРјС‹С… РІ РєРѕРґРµ. -->
+    <!-- WPF: панель построена на XAML-контролах, собираемых в коде. -->
     <Reference Include="WindowsBase" />
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
