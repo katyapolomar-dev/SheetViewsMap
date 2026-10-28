@@ -1,0 +1,14 @@
+<Project>
+
+  <!--
+    Общие свойства сборки для всех проектов решения (плагин 2021/2023/2025 и апдейтер).
+
+    Версия задаётся в ОДНОМ месте — файле Version.txt в корне репозитория:
+    окно «Настройки» сравнивает её с версией релиза на GitHub, поэтому
+    при выпуске новой версии меняется только Version.txt.
+  -->
+  <PropertyGroup>
+    <Version Condition="'$(Version)' == '' and Exists('$(MSBuildThisFileDirectory)Version.txt')">$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)Version.txt').Trim())</Version>
+  </PropertyGroup>
+
+</Project>

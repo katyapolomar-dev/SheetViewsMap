@@ -1,10 +1,12 @@
 using System;
 using System.Linq;
 using System.Windows;
+using System.Windows.Interop;
 using System.Windows.Media;
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using SheetViewsMap.Updates;
 
 // Color и Point есть и в Revit API, и в WPF — берём версию WPF явно.
 using WpfColor = System.Windows.Media.Color;
@@ -12,6 +14,45 @@ using WpfPoint = System.Windows.Point;
 
 namespace SheetViewsMap
 {
+    /// <summary>
+    /// Команда кнопки «Настройки»: открывает окно с версией плагина
+    /// и проверкой обновлений.
+    /// </summary>
+    [Transaction(TransactionMode.Manual)]
+    [Regeneration(RegenerationOption.Manual)]
+    public class SettingsCommand : IExternalCommand
+    {
+        public Result Execute(ExternalCommandData data, ref string message, ElementSet elements)
+        {
+            try
+            {
+                var window = new SettingsWindow(UpdateService.GetRevitYear());
+
+                if (data.Application.MainWindowHandle != IntPtr.Zero)
+                {
+                    try
+                    {
+                        new WindowInteropHelper(window).Owner = data.Application.MainWindowHandle;
+                    }
+                    catch
+                    {
+                        // Если дескриптор не подошёл - окно будет обычным.
+                    }
+                }
+
+                window.Show();
+                window.Activate();
+                return Result.Succeeded;
+            }
+            catch (Exception ex)
+            {
+                message = ex.Message;
+                TaskDialog.Show("SheetViewsMap", "Не удалось открыть настройки:\n\n" + ex.Message);
+                return Result.Failed;
+            }
+        }
+    }
+
     /// <summary>
     /// Команда кнопки на ленте: открывает отдельное окно плагина поверх окон Revit,
     /// а если окно уже открыто — закрывает его.
@@ -49,6 +90,7 @@ namespace SheetViewsMap
     internal static class Ribbon
     {
         private const string ButtonName = "SheetViewsMapPaneButton";
+        private const string SettingsButtonName = "SheetViewsMapSettingsButton";
 
         internal static void Create(UIControlledApplication application)
         {
@@ -73,9 +115,33 @@ namespace SheetViewsMap
                 return;
             }
 
-            // Защита от второй кнопки, если аддины перечитали без перезапуска Revit.
-            if (panel.GetItems().Any(i => i.Name == ButtonName))
+            // Защита от повторных кнопок, если аддины перечитали без перезапуска Revit.
+            if (panel.GetItems().Any(i => i.Name == SettingsButtonName || i.Name == ButtonName))
                 return;
+
+            // Кнопка «Настройки» — первая на панели (как в AssemblingManager):
+            // версия плагина и проверка обновлений.
+            var settingsData = new PushButtonData(
+                SettingsButtonName,
+                App.SettingsButtonText,
+                typeof(App).Assembly.Location,
+                typeof(SettingsCommand).FullName)
+            {
+                ToolTip = App.SettingsButtonToolTip
+            };
+
+            try
+            {
+                ImageSource settingsIcon = Theme.CreateSettingsIcon();
+                settingsData.LargeImage = settingsIcon;
+                settingsData.Image = settingsIcon;
+            }
+            catch (Exception)
+            {
+                // Без иконки кнопка тоже работает, просто выглядит пустой.
+            }
+
+            panel.AddItem(settingsData);
 
             var data = new PushButtonData(
                 ButtonName,

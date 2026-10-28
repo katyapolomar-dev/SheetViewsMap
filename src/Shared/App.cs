@@ -22,6 +22,13 @@ namespace SheetViewsMap
         /// <summary>Подпись на кнопке.</summary>
         internal const string RibbonButtonText = "Открыть окно";
 
+        /// <summary>Подпись на кнопке настроек.</summary>
+        internal const string SettingsButtonText = "Настройки";
+
+        /// <summary>Подсказка при наведении на кнопку настроек.</summary>
+        internal const string SettingsButtonToolTip =
+            "Версия плагина и проверка обновлений.";
+
         /// <summary>Подсказка при наведении на кнопку.</summary>
         internal const string RibbonButtonToolTip =
             "Показать или скрыть окно «Виды на листах»: список всех номеров видов и листов, на которых они размещены.";

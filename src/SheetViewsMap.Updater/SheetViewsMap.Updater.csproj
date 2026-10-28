@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Внешний апдейтер Sheet Views Map.
+
+    Крошечная консольная программа без зависимостей от Revit API:
+    её запускает плагин после скачивания обновления, она дожидается
+    закрытия Revit и подменяет файлы плагина из staging-папки.
+
+    Всегда собирается под net48, версия берётся из Version.txt
+    (через Directory.Build.props в корне репозитория).
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>7.3</LangVersion>
+    <AssemblyName>SheetViewsMap.Updater</AssemblyName>
+    <RootNamespace>SheetViewsMap.Updater</RootNamespace>
+    <Product>Sheet Views Map</Product>
+    <Company>SheetViewsMap</Company>
+    <NeutralLanguage>ru-RU</NeutralLanguage>
+    <DebugType>none</DebugType>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath>..\..\out\Updater\</OutputPath>
+  </PropertyGroup>
+
+</Project>

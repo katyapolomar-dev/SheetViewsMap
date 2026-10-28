@@ -50,6 +50,9 @@ Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 Source: "out\2021\SheetViewsMap2021.dll"; DestDir: "{app}\2021"; Flags: ignoreversion
 Source: "out\2025\SheetViewsMap2025.dll"; DestDir: "{app}\2025"; Flags: ignoreversion
 
+; Внешний апдейтер: применяет обновление после закрытия Revit.
+Source: "out\Updater\SheetViewsMap.Updater.exe"; DestDir: "{app}"; Flags: ignoreversion
+
 ; Чистим хвосты старых вариантов установщика (папка Setup, шаблон .addin).
 [InstallDelete]
 Type: filesandordirs; Name: "{localappdata}\SheetViewsMap\Setup"

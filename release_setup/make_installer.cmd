@@ -39,6 +39,15 @@ if not defined ISCC (
 echo Compiler: !ISCC!
 echo.
 
+rem --- 1a. Build the external updater (no Revit API needed) ---
+echo --- Building updater (SheetViewsMap.Updater.exe) ---
+dotnet build "%ROOT%\src\SheetViewsMap.Updater\SheetViewsMap.Updater.csproj" -c Release
+if errorlevel 1 (
+    echo [ERROR] Updater build failed. See messages above.
+    exit /b 1
+)
+echo.
+
 rem --- 2. Build DLLs for versions with Revit installed ---
 for %%V in (%VERSIONS%) do (
     if exist "%ProgramFiles%\Autodesk\Revit %%V\RevitAPI.dll" (
@@ -57,7 +66,7 @@ rem --- 3. Stage DLLs for the installer ---
 for %%V in (%VERSIONS%) do (
     if exist "%ROOT%\out\%%V\SheetViewsMap%%V.dll" (
         if not exist "%STAGE%\%%V" mkdir "%STAGE%\%%V"
-        copy /Y "%ROOT%\out\%%V\SheetViewsMap%%V.dll" "%STAGE%\%%V\" >nul
+        copy /Y "%ROOT%\out\%%V\*.dll" "%STAGE%\%%V\" >nul
         if errorlevel 1 (
             echo [%%V] Failed to copy into "%STAGE%\%%V".
             exit /b 1
@@ -68,6 +77,26 @@ for %%V in (%VERSIONS%) do (
         echo         Install Revit %%V or put the DLL there manually.
         exit /b 1
     )
+)
+
+rem --- 3a. Stage the updater ---
+if not exist "%STAGE%\Updater" mkdir "%STAGE%\Updater"
+copy /Y "%ROOT%\out\Updater\SheetViewsMap.Updater.exe" "%STAGE%\Updater\" >nul
+if errorlevel 1 (
+    echo [ERROR] Failed to copy SheetViewsMap.Updater.exe.
+    exit /b 1
+)
+
+rem --- 3b. Pack per-year zip assets for the in-app update check ---
+echo.
+echo --- Packing update zips ---
+for %%V in (%VERSIONS%) do (
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "Compress-Archive -Path '%STAGE%\%%V\*' -DestinationPath '%SETUP_DIR%SheetViewsMap-%%V.zip' -Force"
+    if errorlevel 1 (
+        echo [ERROR] Failed to pack SheetViewsMap-%%V.zip
+        exit /b 1
+    )
+    echo SheetViewsMap-%%V.zip - OK
 )
 
 rem --- 4. Compile the installer ---

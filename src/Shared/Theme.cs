@@ -156,6 +156,58 @@ namespace SheetViewsMap
         // ------------------------------------------------------------------ иконка
 
         /// <summary>
+        /// Иконка кнопки «Настройки»: шестерёнка в тех же розовых тонах,
+        /// что и остальные иконки. Рисуется кодом, внешних файлов не нужно.
+        /// </summary>
+        internal static ImageSource CreateSettingsIcon()
+        {
+            var drawing = new DrawingGroup();
+
+            // Прозрачный квадрат задаёт размер иконки ровно 32x32.
+            drawing.Children.Add(new GeometryDrawing(
+                Brushes.Transparent, null, new RectangleGeometry(new Rect(0, 0, 32, 32))));
+
+            var fill = new LinearGradientBrush();
+            fill.StartPoint = new System.Windows.Point(0.3, 0);
+            fill.EndPoint = new System.Windows.Point(0.7, 1);
+            fill.GradientStops.Add(new GradientStop(Color.FromRgb(0xF9, 0xD6, 0xE2), 0.0));
+            fill.GradientStops.Add(new GradientStop(Color.FromRgb(0xF2, 0xC1, 0xD1), 0.55));
+            fill.GradientStops.Add(new GradientStop(Color.FromRgb(0xE0, 0xA8, 0xBD), 1.0));
+            fill.Freeze();
+
+            var stroke = new Pen(IconStroke, 1.4);
+            stroke.Freeze();
+
+            const double center = 16.0;
+            const double toothWidth = 6.5;
+            const double toothLength = 5.5;
+            const double toothRadius = 12.0;
+
+            // Зубья шестерёнки: восемь скруглённых прямоугольников вокруг центра.
+            for (int i = 0; i < 8; i++)
+            {
+                var tooth = new RectangleGeometry(
+                    new Rect(center - toothWidth / 2, center - toothRadius - toothLength / 2, toothWidth, toothLength),
+                    1.6, 1.6);
+                tooth.Transform = new RotateTransform(i * 45.0, center, center);
+                tooth.Freeze();
+                drawing.Children.Add(new GeometryDrawing(fill, stroke, tooth));
+            }
+
+            // Обод: кольцо — внешний круг с вырезанным центром (дырка прозрачная).
+            var outer = new EllipseGeometry(new System.Windows.Point(center, center), 10.5, 10.5);
+            var inner = new EllipseGeometry(new System.Windows.Point(center, center), 4.6, 4.6);
+            var ring = new CombinedGeometry(GeometryCombineMode.Exclude, outer, inner);
+            drawing.Children.Add(new GeometryDrawing(fill, stroke, ring));
+
+            drawing.Freeze();
+
+            var image = new DrawingImage(drawing);
+            image.Freeze();
+            return image;
+        }
+
+        /// <summary>
         /// Иконка кнопки на ленте: объёмный плюс в тех же розовых тонах,
         /// что и кнопки в окне. Рисуется кодом, внешних файлов не нужно.
         /// </summary>

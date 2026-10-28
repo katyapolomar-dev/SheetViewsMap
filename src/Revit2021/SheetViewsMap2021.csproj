@@ -14,7 +14,6 @@
     <RootNamespace>SheetViewsMap</RootNamespace>
     <Product>Sheet Views Map</Product>
     <Company>SheetViewsMap</Company>
-    <Version>1.0.0</Version>
     <NeutralLanguage>ru-RU</NeutralLanguage>
     <DebugType>portable</DebugType>
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -61,6 +60,12 @@
     <Reference Include="WindowsBase" />
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
+
+    <!-- Проверка обновлений: разбор ответа GitHub API и скачивание. -->
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
   </ItemGroup>
 
 </Project>
