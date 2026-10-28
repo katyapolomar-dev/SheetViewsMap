@@ -156,6 +156,70 @@ namespace SheetViewsMap
         // ------------------------------------------------------------------ иконка
 
         /// <summary>
+        /// Иконка переключателя «Наследовать отметку»: стрелка-уклон.
+        /// Розовая с градиентом - режим включён, серая - выключен.
+        /// </summary>
+        internal static ImageSource CreateInheritElevationIcon(bool enabled)
+        {
+            var drawing = new DrawingGroup();
+
+            drawing.Children.Add(new GeometryDrawing(
+                Brushes.Transparent, null, new RectangleGeometry(new Rect(0, 0, 32, 32))));
+
+            Brush mainBrush;
+            Pen linePen;
+            if (enabled)
+            {
+                var fill = new LinearGradientBrush();
+                fill.StartPoint = new System.Windows.Point(0.3, 0);
+                fill.EndPoint = new System.Windows.Point(0.7, 1);
+                fill.GradientStops.Add(new GradientStop(Color.FromRgb(0xF9, 0xD6, 0xE2), 0.0));
+                fill.GradientStops.Add(new GradientStop(Color.FromRgb(0xF2, 0xC1, 0xD1), 0.55));
+                fill.GradientStops.Add(new GradientStop(Color.FromRgb(0xE0, 0xA8, 0xBD), 1.0));
+                fill.Freeze();
+
+                mainBrush = fill;
+                linePen = new Pen(fill, 3.2);
+            }
+            else
+            {
+                mainBrush = new SolidColorBrush(Color.FromRgb(0x86, 0xAF, 0xA2));
+                mainBrush.Freeze();
+
+                linePen = new Pen(mainBrush, 2.6);
+            }
+
+            linePen.Freeze();
+
+            // Линия уклона: снизу-слева вверх-направо.
+            var slope = new LineGeometry(new System.Windows.Point(6, 25), new System.Windows.Point(23, 8));
+            drawing.Children.Add(new GeometryDrawing(null, linePen, slope));
+
+            // Стрелка на конце линии.
+            var head = new PathFigure(
+                new System.Windows.Point(26, 5),
+                new PathSegmentCollection
+                {
+                    new LineSegment(new System.Windows.Point(18, 5.5), true),
+                    new LineSegment(new System.Windows.Point(25.5, 13), true)
+                },
+                true);
+            head.Freeze();
+            drawing.Children.Add(new GeometryDrawing(mainBrush, null,
+                new PathGeometry(new PathFigureCollection { head })));
+
+            // Точка стояния в начале линии.
+            drawing.Children.Add(new GeometryDrawing(
+                mainBrush, null, new EllipseGeometry(new System.Windows.Point(6, 25), 3, 3)));
+
+            drawing.Freeze();
+
+            var image = new DrawingImage(drawing);
+            image.Freeze();
+            return image;
+        }
+
+        /// <summary>
         /// Иконка кнопки «Настройки»: шестерёнка в тех же розовых тонах,
         /// что и остальные иконки. Рисуется кодом, внешних файлов не нужно.
         /// </summary>

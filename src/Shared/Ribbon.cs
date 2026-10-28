@@ -15,6 +15,28 @@ using WpfPoint = System.Windows.Point;
 namespace SheetViewsMap
 {
     /// <summary>
+    /// Команда кнопки-переключателя «Наследовать отметку»: включает или
+    /// выключает режим, при котором опция «Наследовать отметку» автоматически
+    /// включается при черчении трубопроводов. Состояние сохраняется между
+    /// сессиями Revit.
+    /// </summary>
+    [Transaction(TransactionMode.Manual)]
+    [Regeneration(RegenerationOption.Manual)]
+    public class InheritElevationCommand : IExternalCommand
+    {
+        public Result Execute(ExternalCommandData data, ref string message, ElementSet elements)
+        {
+            PluginSettings.InheritElevationAlways = !PluginSettings.InheritElevationAlways;
+            PluginSettings.Save();
+
+            InheritElevationKeeper.SetEnabled(PluginSettings.InheritElevationAlways);
+            Ribbon.UpdateInheritElevationButton();
+
+            return Result.Succeeded;
+        }
+    }
+
+    /// <summary>
     /// Команда кнопки «Настройки»: открывает окно с версией плагина
     /// и проверкой обновлений.
     /// </summary>
@@ -91,6 +113,10 @@ namespace SheetViewsMap
     {
         private const string ButtonName = "SheetViewsMapPaneButton";
         private const string SettingsButtonName = "SheetViewsMapSettingsButton";
+        private const string InheritElevationButtonName = "SheetViewsMapInheritElevationButton";
+
+        /// <summary>Кнопка-переключатель «Наследовать отметку» (нужна для обновления состояния).</summary>
+        internal static PushButton InheritElevationButton { get; private set; }
 
         internal static void Create(UIControlledApplication application)
         {
@@ -116,7 +142,7 @@ namespace SheetViewsMap
             }
 
             // Защита от повторных кнопок, если аддины перечитали без перезапуска Revit.
-            if (panel.GetItems().Any(i => i.Name == SettingsButtonName || i.Name == ButtonName))
+            if (panel.GetItems().Any(i => i.Name == SettingsButtonName || i.Name == ButtonName || i.Name == InheritElevationButtonName))
                 return;
 
             // Кнопка «Настройки» — первая на панели (как в AssemblingManager):
@@ -143,6 +169,16 @@ namespace SheetViewsMap
 
             panel.AddItem(settingsData);
 
+            // Кнопка-переключатель «Наследовать отметку».
+            var inheritData = new PushButtonData(
+                InheritElevationButtonName,
+                App.InheritElevationButtonText,
+                typeof(App).Assembly.Location,
+                typeof(InheritElevationCommand).FullName);
+
+            InheritElevationButton = panel.AddItem(inheritData) as PushButton;
+            UpdateInheritElevationButton();
+
             var data = new PushButtonData(
                 ButtonName,
                 App.RibbonButtonText,
@@ -166,6 +202,27 @@ namespace SheetViewsMap
             }
 
             panel.AddItem(data);
+        }
+
+        /// <summary>Обновляет подпись, подсказку и иконку переключателя по текущему режиму.</summary>
+        internal static void UpdateInheritElevationButton()
+        {
+            if (InheritElevationButton == null)
+                return;
+
+            bool on = PluginSettings.InheritElevationAlways;
+
+            InheritElevationButton.ItemText = on
+                ? App.InheritElevationButtonText + ": ВКЛ"
+                : App.InheritElevationButtonText;
+
+            InheritElevationButton.ToolTip = on
+                ? "Режим включён: опция «Наследовать отметку» будет автоматически включаться при черчении трубопроводов. Нажмите, чтобы отключить."
+                : "Режим выключен. Нажмите, чтобы опция «Наследовать отметку» автоматически включалась при черчении трубопроводов.";
+
+            ImageSource icon = Theme.CreateInheritElevationIcon(on);
+            InheritElevationButton.LargeImage = icon;
+            InheritElevationButton.Image = icon;
         }
     }
 }

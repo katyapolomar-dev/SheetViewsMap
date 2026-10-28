@@ -7,3 +7,13 @@ C:\Users\e.polomar\Desktop\SheetViewsMap\src\Revit2023\obj\Release\SheetViewsMap
 C:\Users\e.polomar\Desktop\SheetViewsMap\src\Revit2023\obj\Release\SheetViewsMap2023.csproj.CoreCompileInputs.cache
 C:\Users\e.polomar\Desktop\SheetViewsMap\src\Revit2023\obj\Release\SheetViewsMap2023.dll
 C:\Users\e.polomar\Desktop\SheetViewsMap\src\Revit2023\obj\Release\SheetViewsMap2023.pdb
+D:\katyacoder\SheetViewsMap\out\2023\SheetViewsMap2023.dll
+D:\katyacoder\SheetViewsMap\out\2023\SheetViewsMap2023.pdb
+D:\katyacoder\SheetViewsMap\src\Revit2023\obj\Release\SheetViewsMap2023.csproj.AssemblyReference.cache
+D:\katyacoder\SheetViewsMap\src\Revit2023\obj\Release\SheetViewsMap2023.GeneratedMSBuildEditorConfig.editorconfig
+D:\katyacoder\SheetViewsMap\src\Revit2023\obj\Release\SheetViewsMap2023.AssemblyInfoInputs.cache
+D:\katyacoder\SheetViewsMap\src\Revit2023\obj\Release\SheetViewsMap2023.AssemblyInfo.cs
+D:\katyacoder\SheetViewsMap\src\Revit2023\obj\Release\SheetViewsMap2023.csproj.CoreCompileInputs.cache
+D:\katyacoder\SheetViewsMap\src\Revit2023\obj\Release\SheetViewsMap2023.sourcelink.json
+D:\katyacoder\SheetViewsMap\src\Revit2023\obj\Release\SheetViewsMap2023.dll
+D:\katyacoder\SheetViewsMap\src\Revit2023\obj\Release\SheetViewsMap2023.pdb

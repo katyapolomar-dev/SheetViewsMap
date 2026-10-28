@@ -419,13 +419,13 @@
     "C:\\Users\\e.polomar\\.nuget\\packages\\": {}
   },
   "project": {
-    "version": "1.0.0",
+    "version": "1.2.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\e.polomar\\Desktop\\SheetViewsMap\\src\\Revit2023\\SheetViewsMap2023.csproj",
+      "projectUniqueName": "D:\\katyacoder\\SheetViewsMap\\src\\Revit2023\\SheetViewsMap2023.csproj",
       "projectName": "SheetViewsMap2023",
-      "projectPath": "C:\\Users\\e.polomar\\Desktop\\SheetViewsMap\\src\\Revit2023\\SheetViewsMap2023.csproj",
+      "projectPath": "D:\\katyacoder\\SheetViewsMap\\src\\Revit2023\\SheetViewsMap2023.csproj",
       "packagesPath": "C:\\Users\\e.polomar\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\e.polomar\\Desktop\\SheetViewsMap\\src\\Revit2023\\obj\\",
+      "outputPath": "D:\\katyacoder\\SheetViewsMap\\src\\Revit2023\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\e.polomar\\AppData\\Roaming\\NuGet\\NuGet.Config"
@@ -469,7 +469,7 @@
             "version": "[1.0.3, )"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.425\\RuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.427\\RuntimeIdentifierGraph.json"
       }
     }
   }

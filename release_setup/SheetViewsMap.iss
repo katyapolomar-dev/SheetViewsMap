@@ -13,15 +13,21 @@
 ;  Файл должен быть сохранён в UTF-8 с BOM (кириллица в [Messages]).
 ; ============================================================
 
+; Версия генерируется make_installer.cmd в файл version.iss
+; из Version.txt (единственный источник версии в репозитории).
+#include "version.iss"
+
 [Setup]
 AppName=Sheet Views Map
-AppVersion=1.0.0
+; Версия приходит из release_setup\version.iss, который генерирует make_installer.cmd
+; из Version.txt (единственный источник версии).
+AppVersion={#MyAppVersion}
 AppPublisher=katyapolomar-dev
 AppPublisherURL=https://github.com/katyapolomar-dev/SheetViewsMap
 AppSupportURL=https://github.com/katyapolomar-dev/SheetViewsMap
 AppUpdatesURL=https://github.com/katyapolomar-dev/SheetViewsMap/releases
-VersionInfoVersion=1.0.0
-VersionInfoProductVersion=1.0.0
+VersionInfoVersion={#MyAppVersion}
+VersionInfoProductVersion={#MyAppVersion}
 
 ; Всегда ставим в %LOCALAPPDATA%\SheetViewsMap (не спрашиваем путь).
 DefaultDirName={localappdata}\SheetViewsMap
@@ -36,7 +42,7 @@ PrivilegesRequired=lowest
 ArchitecturesInstallIn64BitMode=x64compatible
 
 OutputDir=.
-OutputBaseFilename=SheetViewsMap_Setup_v1.0.0
+OutputBaseFilename=SheetViewsMap_Setup_v{#MyAppVersion}
 SetupIconFile=setup_icon.ico
 Compression=lzma2/max
 SolidCompression=yes

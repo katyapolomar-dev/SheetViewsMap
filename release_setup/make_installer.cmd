@@ -18,7 +18,9 @@ set "SETUP_DIR=%~dp0"
 for %%I in ("%SETUP_DIR%..") do set "ROOT=%%~fI"
 set "STAGE=%SETUP_DIR%out"
 set "VERSIONS=2021 2025"
-set "OUTPUT_NAME=SheetViewsMap_Setup_v1.0.0.exe"
+set "APP_VERSION=1.2.0"
+rem Единый источник версии - Version.txt; здесь меняем при выпуске релиза.
+set "OUTPUT_NAME=SheetViewsMap_Setup_v%APP_VERSION%.exe"
 
 echo ============================================================
 echo   Sheet Views Map - building installer
@@ -99,7 +101,10 @@ for %%V in (%VERSIONS%) do (
     echo SheetViewsMap-%%V.zip - OK
 )
 
-rem --- 4. Compile the installer ---
+rem --- 4. Версия для установщика (version.iss читается .iss-скриптом) ---
+> "%SETUP_DIR%version.iss" echo #define MyAppVersion "%APP_VERSION%"
+
+rem --- 5. Compile the installer ---
 echo.
 echo --- Compiling installer ---
 "!ISCC!" "%SETUP_DIR%SheetViewsMap.iss"

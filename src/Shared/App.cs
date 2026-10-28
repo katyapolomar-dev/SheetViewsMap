@@ -29,6 +29,9 @@ namespace SheetViewsMap
         internal const string SettingsButtonToolTip =
             "Версия плагина и проверка обновлений.";
 
+        /// <summary>Подпись на кнопке-переключателе «Наследовать отметку».</summary>
+        internal const string InheritElevationButtonText = "Наследовать отметку";
+
         /// <summary>Подсказка при наведении на кнопку.</summary>
         internal const string RibbonButtonToolTip =
             "Показать или скрыть окно «Виды на листах»: список всех номеров видов и листов, на которых они размещены.";
@@ -37,8 +40,12 @@ namespace SheetViewsMap
         {
             try
             {
+                PluginSettings.Load();
                 Bridge.Initialize();
                 Ribbon.Create(application);
+
+                // Восстанавливаем включённый до перезапуска режим «Наследовать отметку».
+                InheritElevationKeeper.SetEnabled(PluginSettings.InheritElevationAlways);
             }
             catch (Exception ex)
             {
