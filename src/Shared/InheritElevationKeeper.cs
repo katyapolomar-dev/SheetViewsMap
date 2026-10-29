@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Reflection;
@@ -92,8 +93,12 @@ namespace SheetViewsMap
             if (tabs == null)
                 return;
 
+            var tabTitles = new List<string>();
+
             foreach (object tab in Each(tabs))
             {
+                tabTitles.Add(GetString(tab, "Title") ?? "?");
+
                 object panels = GetProperty(tab, "Panels");
                 if (panels == null)
                     continue;
@@ -108,7 +113,8 @@ namespace SheetViewsMap
                 }
             }
 
-            LogThrottled("переключатель не найден в модели ленты (инструмент трубопровода не активен)");
+            LogThrottled("переключатель не найден; вкладки: " +
+                (tabTitles.Count > 0 ? string.Join(" | ", tabTitles.ToArray()) : "нет"));
         }
 
         private static object GetRibbon()
@@ -141,20 +147,22 @@ namespace SheetViewsMap
 
                 string typeName = entry.GetType().Name;
 
-                // Переключатель: цель найдена - включаем, если выключен.
-                if (typeName == "RibbonToggleButton")
+                // Любой элемент с вхождением имени и булевым IsChecked -
+                // это переключатель (RibbonToggleButton / RibbonSplitToggleButton / ...).
+                if (matches)
                 {
                     object isChecked = GetProperty(entry, "IsChecked");
-                    bool on = isChecked is bool && (bool)isChecked;
-
-                    if (!on)
+                    if (isChecked is bool)
                     {
-                        SetProperty(entry, "IsChecked", true);
-                        _lastApplyUtc = nowUtc;
-                        Log("включена: \"" + text.Trim() + "\"");
-                    }
+                        if (!(bool)isChecked)
+                        {
+                            SetProperty(entry, "IsChecked", true);
+                            _lastApplyUtc = nowUtc;
+                            Log("включена: \"" + text.Trim() + "\" (" + typeName + ")");
+                        }
 
-                    return true;
+                        return true;
+                    }
                 }
 
                 // Контейнеры (сплит/пулдаун-кнопки) обходим рекурсивно.
