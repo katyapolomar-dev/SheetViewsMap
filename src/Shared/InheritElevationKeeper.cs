@@ -493,8 +493,7 @@ namespace SheetViewsMap
                     if (string.IsNullOrEmpty(value))
                         continue;
 
-                    if (value.IndexOf(RuName, StringComparison.OrdinalIgnoreCase) >= 0
-                        || value.IndexOf(EnName, StringComparison.OrdinalIgnoreCase) >= 0)
+                    if (MatchesTargetPhrase(value))
                     {
                         return true;
                     }
@@ -505,6 +504,17 @@ namespace SheetViewsMap
             }
 
             return false;
+        }
+
+        /// <summary>Целевая фраза: текст содержит «наследован…» и «отмет…».
+        /// Покрывает «Наследовать отметку» и «Наследование отметок».</summary>
+        private static bool MatchesTargetPhrase(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return false;
+
+            return value.IndexOf("наследован", StringComparison.OrdinalIgnoreCase) >= 0
+                && value.IndexOf("отмет", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         /// <summary>
@@ -551,8 +561,7 @@ namespace SheetViewsMap
                     if (string.IsNullOrEmpty(value))
                         continue;
 
-                    if (value.IndexOf(RuName, StringComparison.OrdinalIgnoreCase) >= 0
-                        || value.IndexOf(EnName, StringComparison.OrdinalIgnoreCase) >= 0)
+                    if (MatchesTargetPhrase(value))
                     {
                         matchedProperty = property.Name;
                         matchedValue = value;
