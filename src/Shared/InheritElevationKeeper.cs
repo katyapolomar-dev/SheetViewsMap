@@ -170,7 +170,7 @@ namespace SheetViewsMap
 
                 _lastDumpLogUtc = nowUtc;
                 Log("=== ДАМП вкладки \"" + title + "\" ===");
-                Log(DumpObject(tab, 1));
+                Log(DumpTabCompact(tab));
                 Log("=== конец дампа ===");
             }
 
@@ -337,6 +337,66 @@ namespace SheetViewsMap
                 text = text.Substring(0, 60) + "…";
 
             return "(" + value.GetType().Name + ") " + text;
+        }
+
+        /// <summary>Компактный дамп вкладки: каждая панель и каждый элемент — одной строкой.</summary>
+        private static string DumpTabCompact(object tab)
+        {
+            var sb = new StringBuilder();
+            string tabTitle = GetString(tab, "Title") ?? "?";
+            sb.AppendLine("Вкладка \"" + tabTitle + "\":");
+
+            object panels = GetProperty(tab, "Panels");
+            if (panels == null)
+            {
+                sb.AppendLine("  (свойство Panels не найдено)");
+                return sb.ToString();
+            }
+
+            foreach (object panel in Each(panels))
+            {
+                object source = GetProperty(panel, "Source");
+                string panelTitle = source == null ? "?" : GetString(source, "Title") ?? "?";
+                sb.AppendLine("  Панель \"" + panelTitle + "\":");
+
+                object items = source == null ? null : GetProperty(source, "Items");
+                if (items == null)
+                {
+                    sb.AppendLine("    (свойство Items не найдено)");
+                    continue;
+                }
+
+                int index = 0;
+                foreach (object entry in Each(items))
+                {
+                    sb.AppendLine("    " + DescribeCompact(entry));
+
+                    if (++index >= 30)
+                    {
+                        sb.AppendLine("    …(дальше обрезано)");
+                        break;
+                    }
+                }
+            }
+
+            return sb.ToString();
+        }
+
+        /// <summary>Краткое описание элемента ленты: тип, подписи, состояние.</summary>
+        private static string DescribeCompact(object entry)
+        {
+            string type = entry.GetType().Name;
+            string title = GetString(entry, "Title");
+            string text = GetString(entry, "Text");
+            string automationName = GetString(entry, "AutomationName");
+            object isChecked = GetProperty(entry, "IsChecked");
+            string state = isChecked is bool b ? ((bool)b ? "ВКЛ" : "выкл") : "-";
+
+            return type
+                + " | Title=\"" + (title ?? "-") + "\""
+                + " | Text=\"" + (text ?? "-") + "\""
+                + " | AutomationName=\"" + (automationName ?? "-") + "\""
+                + " | IsChecked=" + state;
         }
 
         private static DateTime _lastDumpLogUtc = DateTime.MinValue;
