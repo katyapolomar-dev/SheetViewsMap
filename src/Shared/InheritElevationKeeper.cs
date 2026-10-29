@@ -99,7 +99,14 @@ namespace SheetViewsMap
 
             foreach (object tab in Each(tabs))
             {
-                tabTitles.Add(GetString(tab, "Title") ?? "?");
+                string tabTitle = GetString(tab, "Title") ?? "?";
+                tabTitles.Add(tabTitle);
+
+                // Своя вкладка ("Sheet Views Map"): на ней лежит наша кнопка
+                // «Наследовать отметку: ВКЛ» — пропускаем, чтобы поиск не
+                // перехватывался собственной кнопкой плагина.
+                if (string.Equals(tabTitle, App.RibbonTabName, StringComparison.OrdinalIgnoreCase))
+                    continue;
 
                 object panels = GetProperty(tab, "Panels");
                 if (panels == null)
