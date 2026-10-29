@@ -135,6 +135,10 @@ namespace SheetViewsMap
                 {
                     string ctxTitle = GetString(tab, "Title") ?? "?";
                     tabTitles.Add(ctxTitle);
+
+                    // Своя вкладка не бывает контекстной, но проверяем на всякий случай.
+                    if (string.Equals(ctxTitle, App.RibbonTabName, StringComparison.OrdinalIgnoreCase))
+                        continue;
                     tabObjects.Add(tab);
 
                     object panels = GetProperty(tab, "Panels");
@@ -199,6 +203,11 @@ namespace SheetViewsMap
 
             if (_dumpLines > 300)
                 return "…(лог обрезан по размеру)";
+
+            // Свою вкладку не дампим - там только наша кнопка-переключатель.
+            string ownTitle = GetString(obj, "Title");
+            if (string.Equals(ownTitle, App.RibbonTabName, StringComparison.OrdinalIgnoreCase))
+                return "(" + ownTitle + " — своя вкладка, пропущена)";
 
             var sb = new StringBuilder();
             string indent = new string(' ', depth * 2);
@@ -373,6 +382,19 @@ namespace SheetViewsMap
             return GetStaticProperty(_componentManagerType, "Ribbon");
         }
 
+        /// <summary>Это кнопка нашего плагина? Наш код добавляет к подписи
+        /// суффикс состояния «: ВКЛ» / «: ВЫКЛ» — у кнопок Revit его не бывает.</summary>
+        private static bool IsOwnButtonName(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+                return false;
+
+            string trimmed = name.TrimEnd();
+
+            return trimmed.EndsWith(": ВКЛ", StringComparison.OrdinalIgnoreCase)
+                || trimmed.EndsWith(": ВЫКЛ", StringComparison.OrdinalIgnoreCase);
+        }
+
         /// <summary>Ищет целевую фразу во всех строковых свойствах элемента
         /// (Title, Text, AutomationName, ToolTip, Description и т.д.).</summary>
         private static bool MatchesTarget(object entry)
@@ -421,6 +443,12 @@ namespace SheetViewsMap
                 return;
 
             visited.Add(obj);
+
+            // Пропуск собственной вкладки и собственной кнопки плагина.
+            string ownCheck = GetString(obj, "Title") ?? GetString(obj, "AutomationName") ?? string.Empty;
+            if (string.Equals(ownCheck, App.RibbonTabName, StringComparison.OrdinalIgnoreCase)
+                || IsOwnButtonName(ownCheck))
+                return;
 
             object isChecked = GetProperty(obj, "IsChecked");
             bool hasToggle = isChecked is bool;
@@ -533,6 +561,12 @@ namespace SheetViewsMap
             foreach (object entry in Each(items))
             {
                 if (entry == null)
+                    continue;
+
+                // Наша собственная кнопка «Наследовать отметку: ВКЛ» - пропускаем.
+                if (IsOwnButtonName(GetString(entry, "AutomationName") ?? string.Empty)
+                    || IsOwnButtonName(GetString(entry, "Title") ?? string.Empty)
+                    || IsOwnButtonName(GetString(entry, "Text") ?? string.Empty))
                     continue;
 
                 string text = GetString(entry, "Title") ?? GetString(entry, "Text") ?? GetString(entry, "AutomationName") ?? string.Empty;
