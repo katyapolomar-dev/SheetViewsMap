@@ -33,6 +33,8 @@ namespace SheetViewsMap
             "SheetViewsMap", "inherit-log.txt");
 
         private static DispatcherTimer _timer;
+        private static Type _componentManagerType;
+        private static Assembly _ribbonSourceAssembly;
         private static DateTime _lastApplyUtc = DateTime.MinValue;
         private static DateTime _lastNotFoundLogUtc = DateTime.MinValue;
 
@@ -142,16 +144,43 @@ namespace SheetViewsMap
 
         private static object GetRibbon()
         {
+            if (_componentManagerType != null)
+                return GetStaticProperty(_componentManagerType, "Ribbon");
+
+            // Ищем тип Autodesk.Windows.ComponentManager среди ВСЕХ загруженных
+            // сборок (имя сборки ленты может отличаться от ожидаемого).
+            Assembly sourceAssembly = null;
+
             foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
-                if (!string.Equals(assembly.GetName().Name, "UIFramework", StringComparison.OrdinalIgnoreCase))
+                Type type = null;
+                try
+                {
+                    type = assembly.GetType("Autodesk.Windows.ComponentManager");
+                }
+                catch
+                {
+                    continue;
+                }
+
+                if (type == null)
                     continue;
 
-                Type type = assembly.GetType("Autodesk.Windows.ComponentManager");
-                return type == null ? null : GetStaticProperty(type, "Ribbon");
+                sourceAssembly = assembly;
+                _componentManagerType = type;
+                Log("ComponentManager найден в сборке: " + sourceAssembly.GetName().Name +
+                    ", свойство Ribbon: " + (GetStaticProperty(type, "Ribbon") != null));
+                break;
             }
 
-            return null;
+            if (_componentManagerType == null)
+            {
+                LogThrottled("тип Autodesk.Windows.ComponentManager не найден ни в одной из " +
+                    AppDomain.CurrentDomain.GetAssemblies().Length + " загруженных сборок");
+                return null;
+            }
+
+            return GetStaticProperty(_componentManagerType, "Ribbon");
         }
 
         private static bool WalkItems(object items, DateTime nowUtc, int depth)
