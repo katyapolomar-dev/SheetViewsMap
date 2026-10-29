@@ -1,9 +1,6 @@
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Windows.Threading;
@@ -11,35 +8,35 @@ using System.Windows.Threading;
 namespace SheetViewsMap
 {
     /// <summary>
-    /// Держит опцию «Наследовать отметку» включённой при черчении трубопроводов.
+    /// Держит опцию «Наследование отметок» включённой при черчении трубопроводов.
     ///
-    /// Опция не представлена в Revit API, но лента Revit — это WPF-объекты с
-    /// объектной моделью Autodesk.Windows (сборка UIFramework.dll, грузится самим
-    /// Revit'ом). Доступ через рефлексию - это работает на всех годах Revit и на
-    /// обоих рантаймах (.NET Framework и .NET 8), без ссылок на внутренние сборки.
+    /// Опция не представлена в Revit API, поэтому работаем с лентой напрямую:
+    /// DispatcherTimer на потоке Revit раз в полсекунды ищет в визуальном дереве
+    /// ленты кнопку-переключатель «Наследование отметок» и, если она выключена,
+    /// нажимает её через AutomationPeer (полная эмуляция щелчка мышью —
+    /// выполняется на потоке Revit, без UIA и без фоновых потоков).
     ///
-    /// DispatcherTimer на потоке Revit раз в полсекунды обходит модель ленты,
-    /// находит переключатель «Наследовать отметку» и ставит IsChecked = true,
-    /// если он выключен. Попытки пишутся в лог inherit-log.txt.
+    /// Собственные кнопки плагина (суффикс «: ВКЛ» / «: ВЫКЛ») и вкладка
+    /// «Sheet Views Map» исключены из поиска.
+    ///
+    /// Попытки пишутся в лог inherit-log.txt.
     /// </summary>
     internal static class InheritElevationKeeper
     {
-        private const string RuName = "наследовать отметку";
-        private const string EnName = "inherit elevation";
+        private const string RuName = "наследоватьотметку";
+        private const string RuName2 = "наследованиеотметок";
+        private const string EnName = "inheritelevation";
 
         private static readonly TimeSpan SearchInterval = TimeSpan.FromMilliseconds(500);
-        private static readonly TimeSpan ApplyCooldown = TimeSpan.FromSeconds(2);
+        private static readonly TimeSpan ClickCooldown = TimeSpan.FromSeconds(2);
+        private static readonly TimeSpan ThrottledLogInterval = TimeSpan.FromSeconds(30);
         private static readonly string LogPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "SheetViewsMap", "inherit-log.txt");
 
         private static DispatcherTimer _timer;
-        private static Type _componentManagerType;
-        private static Assembly _ribbonSourceAssembly;
-        private static DateTime _lastApplyUtc = DateTime.MinValue;
-        private static DateTime _lastNotFoundLogUtc = DateTime.MinValue;
-        private static DateTime _lastScanLogUtc = DateTime.MinValue;
-        private static int _scanLines;
+        private static DateTime _lastClickUtc = DateTime.MinValue;
+        private static DateTime _lastThrottledLogUtc = DateTime.MinValue;
 
         /// <summary>Включает или выключает автоматическое сопровождение опции.</summary>
         internal static void SetEnabled(bool enabled)
@@ -49,7 +46,7 @@ namespace SheetViewsMap
                 if (_timer != null)
                     return;
 
-                Log("keeper v4 enabled");
+                Log("keeper v7 enabled");
                 _timer = new DispatcherTimer(DispatcherPriority.Background)
                 {
                     Interval = SearchInterval
@@ -72,12 +69,20 @@ namespace SheetViewsMap
         private static void OnTick(object sender, EventArgs e)
         {
             DateTime nowUtc = DateTime.UtcNow;
-            if (nowUtc - _lastApplyUtc < ApplyCooldown)
+            if (nowUtc - _lastClickUtc < ClickCooldown)
                 return;
 
             try
             {
-                ApplyIfNeeded(nowUtc);
+                // Корень визуального дерева ленты - WPF-элемент; его обход
+                // выполняется на потоке Revit и ничего не блокирует.
+                if (!(GetRibbon() is System.Windows.Media.Visual ribbonVisual))
+                {
+                    LogThrottled("лента недоступна");
+                    return;
+                }
+
+                TryClickInheritElevationToggle(ribbonVisual, nowUtc);
             }
             catch (Exception ex)
             {
@@ -85,426 +90,136 @@ namespace SheetViewsMap
             }
         }
 
-        private static void ApplyIfNeeded(DateTime nowUtc)
+        // ------------------------------------------------------------------ поиск кнопки
+
+        private static void TryClickInheritElevationToggle(System.Windows.Media.Visual root, DateTime nowUtc)
         {
-            object ribbon = GetRibbon();
-            if (ribbon == null)
+            var stack = new System.Collections.Generic.Stack<System.Windows.Media.Visual>();
+            var visited = new System.Collections.Generic.HashSet<System.Windows.Media.Visual>();
+            int toggleButtonsSeen = 0;
+            bool clicked = false;
+
+            stack.Push(root);
+
+            while (stack.Count > 0 && !clicked)
             {
-                LogThrottled("лента недоступна");
-                return;
-            }
+                System.Windows.Media.Visual current = stack.Pop();
 
-            object tabs = GetProperty(ribbon, "Tabs");
-            if (tabs == null)
-                return;
-
-            var tabTitles = new List<string>();
-            var tabObjects = new List<object>();
-
-            foreach (object tab in Each(tabs))
-            {
-                string tabTitle = GetString(tab, "Title") ?? "?";
-                tabTitles.Add(tabTitle);
-                tabObjects.Add(tab);
-
-                // Своя вкладка ("Sheet Views Map"): на ней лежит наша кнопка
-                // «Наследовать отметку: ВКЛ» — пропускаем, чтобы поиск не
-                // перехватывался собственной кнопкой плагина.
-                if (string.Equals(tabTitle, App.RibbonTabName, StringComparison.OrdinalIgnoreCase))
+                if (current == null || visited.Contains(current))
                     continue;
 
-                object panels = GetProperty(tab, "Panels");
-                if (panels == null)
-                    continue;
+                visited.Add(current);
 
-                foreach (object panel in Each(panels))
+                // Интересуют WPF-переключатели и кнопки.
+                if (current is System.Windows.Controls.Primitives.ToggleButton toggleButton)
                 {
-                    object source = GetProperty(panel, "Source");
-                    object items = source == null ? null : GetProperty(source, "Items");
+                    toggleButtonsSeen++;
 
-                    if (items != null && WalkItems(items, nowUtc, 0))
-                        return;
-                }
-            }
-
-            // Контекстные вкладки (черчение труб и т.п.) хранятся отдельно.
-            object contextual = GetProperty(ribbon, "ContextualTabs");
-            if (contextual != null)
-            {
-                foreach (object tab in Each(contextual))
-                {
-                    string ctxTitle = GetString(tab, "Title") ?? "?";
-                    tabTitles.Add(ctxTitle);
-
-                    // Своя вкладка не бывает контекстной, но проверяем на всякий случай.
-                    if (string.Equals(ctxTitle, App.RibbonTabName, StringComparison.OrdinalIgnoreCase))
-                        continue;
-                    tabObjects.Add(tab);
-
-                    object panels = GetProperty(tab, "Panels");
-                    if (panels == null)
-                        continue;
-
-                    foreach (object panel in Each(panels))
+                    string normalized = CollectVisualText(toggleButton);
+                    if (MatchesTargetPhrase(normalized))
                     {
-                        object source = GetProperty(panel, "Source");
-                        object items = source == null ? null : GetProperty(source, "Items");
+                        // Нашли настоящую кнопку «Наследование отметок»:
+                        // если выключена - нажимаем через AutomationPeer.
+                        if (toggleButton.IsChecked != true)
+                        {
+                            toggleButton.Dispatcher.Invoke
+                            (
+                                new Action(() =>
+                                {
+                                    var peer = System.Windows.Automation.Peers.UIElementAutomationPeer.CreatePeerForElement(toggleButton);
+                                    var toggleProvider = peer == null
+                                        ? null
+                                        : peer.GetPattern(System.Windows.Automation.Peers.PatternInterface.Toggle)
+                                            as System.Windows.Automation.Provider.IToggleProvider;
 
-                        if (items != null && WalkItems(items, nowUtc, 0))
-                            return;
+                                    if (toggleProvider != null)
+                                        toggleProvider.Toggle();
+                                    else
+                                        toggleButton.RaiseEvent(new System.Windows.RoutedEventArgs(
+                                            System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                                }),
+                                DispatcherPriority.Send
+                            );
+
+                            _lastClickUtc = nowUtc;
+                            Log("нажата кнопка «Наследование отметок» (Toggle через AutomationPeer)");
+                        }
+
+                        clicked = true;
                     }
                 }
+
+                int childrenCount = System.Windows.Media.VisualTreeHelper.GetChildrenCount(current);
+                for (int i = 0; i < childrenCount; i++)
+                    stack.Push(System.Windows.Media.VisualTreeHelper.GetChild(current, i));
             }
 
-            // Диагностика: если инструмент трубопровода активен (есть вкладка
-            // с «Труба» в названии), но переключатель не найден - раз в 30 секунд
-            // пишем полный дамп содержимого этой вкладки.
-            foreach (object tab in tabObjects)
-            {
-                string title = GetString(tab, "Title") ?? string.Empty;
-                if (title.IndexOf("Труба", StringComparison.OrdinalIgnoreCase) < 0)
-                    continue;
-
-                if (nowUtc - _lastDumpLogUtc < TimeSpan.FromSeconds(30))
-                    continue;
-
-                _lastDumpLogUtc = nowUtc;
-                Log("=== ДАМП вкладки \"" + title + "\" ===");
-                Log(DumpTabCompact(tab));
-                Log("=== конец дампа ===");
-            }
-
-            // Фолбэк-скан: полный обход модели ленты с диагностикой кандидатов
-            // (не чаще раза в 30 секунд).
-            if (nowUtc - _lastScanLogUtc >= TimeSpan.FromSeconds(30))
-            {
-                _lastScanLogUtc = nowUtc;
-                _scanLines = 0;
-                ScanForTarget(ribbon, 0, new HashSet<object>());
-            }
-
-            LogThrottled("переключатель не найден; вкладки: " +
-                (tabTitles.Count > 0 ? string.Join(" | ", tabTitles.ToArray()) : "нет"));
+            if (toggleButtonsSeen == 0)
+                LogThrottled("ToggleButton на ленте не найдены (инструмент трубопровода не активен)");
+            else if (!clicked)
+                LogThrottled("ToggleButton: " + toggleButtonsSeen + ", целевая кнопка не найдена (опция, видимо, уже включена)");
         }
 
-        private static int _dumpLines;
-
-        private static string DumpObject(object obj, int depth)
+        /// <summary>Собирает весь текст кнопки из визуального дерева (TextBlock'и) и Content.</summary>
+        private static string CollectVisualText(System.Windows.Media.Visual root)
         {
-            var visited = new HashSet<object>();
-            _dumpLines = 0;
-            return DumpObject(obj, depth, visited);
-        }
-
-        private static string DumpObject(object obj, int depth, HashSet<object> visited)
-        {
-            if (obj == null)
-                return "(null)";
-
-            if (_dumpLines > 300)
-                return "…(лог обрезан по размеру)";
-
-            // Свою вкладку не дампим - там только наша кнопка-переключатель.
-            string ownTitle = GetString(obj, "Title");
-            if (string.Equals(ownTitle, App.RibbonTabName, StringComparison.OrdinalIgnoreCase))
-                return "(" + ownTitle + " — своя вкладка, пропущена)";
-
             var sb = new StringBuilder();
-            string indent = new string(' ', depth * 2);
-            Type type = obj.GetType();
-
-            sb.Append(indent).AppendLine(type.Name + " {");
-            _dumpLines++;
-
-            PropertyInfo[] properties;
-            try
-            {
-                properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-            }
-            catch (Exception ex)
-            {
-                sb.Append(indent).AppendLine("  <ошибка получения свойств: " + ex.Message + ">");
-                return sb.ToString();
-            }
-
-            foreach (PropertyInfo property in properties.OrderBy(p => p.Name))
-            {
-                if (_dumpLines > 300)
-                {
-                    sb.Append(indent).AppendLine("  …(обрезано)");
-                    break;
-                }
-
-                object value;
-                try
-                {
-                    value = property.GetValue(obj, null);
-                }
-                catch (Exception ex)
-                {
-                    sb.Append(indent).Append("  ").Append(property.Name).Append(" = <ошибка: ").Append(ex.Message).AppendLine(">");
-                    _dumpLines++;
-                    continue;
-                }
-
-                sb.Append(indent).Append("  ").Append(property.Name).Append(" = ").AppendLine(Preview(value));
-                _dumpLines++;
-
-                // Рекурсивно заходим в объекты, похожие на элементы ленты/вкладки.
-                if (depth < 3 && value != null && !value.GetType().IsPrimitive && !(value is string))
-                {
-                    string valueTypeName = value.GetType().Name;
-                    if (valueTypeName.Contains("Ribbon") || valueTypeName.Contains("Tab") || valueTypeName.Contains("Panel"))
-                    {
-                        if (!visited.Contains(value))
-                        {
-                            visited.Add(value);
-                            sb.Append(DumpObject(value, depth + 1, visited));
-                        }
-                    }
-                }
-            }
-
-            // Стандартные контейнеры.
-            if (depth < 4)
-            {
-                object source = GetProperty(obj, "Source");
-                if (source != null && !visited.Contains(source))
-                {
-                    visited.Add(source);
-                    sb.Append(DumpObject(source, depth + 1, visited));
-                }
-
-                object items = GetProperty(obj, "Items");
-                if (items != null)
-                {
-                    int index = 0;
-                    foreach (object child in Each(items))
-                    {
-                        if (!visited.Contains(child))
-                        {
-                            visited.Add(child);
-                            sb.Append(DumpObject(child, depth + 1, visited));
-                        }
-
-                        if (++index >= 40)
-                        {
-                            sb.Append(indent).AppendLine("  …(показаны первые 40 элементов)");
-                            break;
-                        }
-                    }
-                }
-
-                // Коллекции Autodesk.Windows (RibbonPanelCollection и т.п.) - IEnumerable.
-                if (obj is IEnumerable selfCollection && !(obj is string))
-                {
-                    int index = 0;
-                    foreach (object child in Each(selfCollection))
-                    {
-                        if (_dumpLines > 300)
-                            break;
-
-                        sb.Append(DumpObject(child, depth + 1, visited));
-                        if (++index >= 40)
-                        {
-                            sb.Append(indent).AppendLine("  …(показаны первые 40 элементов)");
-                            break;
-                        }
-                    }
-                }
-            }
-
-            sb.Append(indent).AppendLine("}");
+            CollectText(root, sb, 0);
             return sb.ToString();
         }
 
-        private static string Preview(object value)
+        private static void CollectText(System.Windows.Media.Visual current, StringBuilder sb, int depth)
         {
-            if (value == null)
-                return "null";
+            if (depth > 6)
+                return;
 
-            if (value is bool b)
-                return b.ToString();
+            if (current is System.Windows.Controls.TextBlock textBlock)
+                sb.Append(textBlock.Text);
 
-            if (value is string s)
-                return "\"" + (s.Length > 80 ? s.Substring(0, 80) + "…" : s) + "\"";
-
-            if (value is int || value is long || value is short || value is double)
-                return value.ToString();
-
-            string text = value.ToString();
-            if (text.Length > 60)
-                text = text.Substring(0, 60) + "…";
-
-            return "(" + value.GetType().Name + ") " + text;
-        }
-
-        /// <summary>Компактный дамп вкладки: каждая панель и каждый элемент — одной строкой.</summary>
-        private static string DumpTabCompact(object tab)
-        {
-            var sb = new StringBuilder();
-            string tabTitle = GetString(tab, "Title") ?? "?";
-            sb.AppendLine("Вкладка \"" + tabTitle + "\":");
-
-            object panels = GetProperty(tab, "Panels");
-            if (panels == null)
+            if (current is System.Windows.Controls.ContentControl contentControl)
             {
-                sb.AppendLine("  (свойство Panels не найдено)");
-                return sb.ToString();
+                string content = contentControl.Content as string;
+                if (!string.IsNullOrEmpty(content))
+                    sb.Append(content);
             }
 
-            foreach (object panel in Each(panels))
-            {
-                object source = GetProperty(panel, "Source");
-                string panelTitle = source == null ? "?" : GetString(source, "Title") ?? "?";
-                sb.AppendLine("  Панель \"" + panelTitle + "\":");
-
-                object items = source == null ? null : GetProperty(source, "Items");
-                if (items == null)
-                {
-                    sb.AppendLine("    (свойство Items не найдено)");
-                    continue;
-                }
-
-                int index = 0;
-                foreach (object entry in Each(items))
-                {
-                    sb.AppendLine("    " + DescribeCompact(entry));
-
-                    // Контейнеры (RibbonFoldPanel и т.п.): показываем содержимое.
-                    object inner = GetProperty(entry, "Items");
-                    if (inner != null)
-                    {
-                        int innerCount = 0;
-                        foreach (object child in Each(inner))
-                        {
-                            innerCount++;
-                            sb.AppendLine("      └ " + DescribeCompact(child));
-                        }
-
-                        if (innerCount == 0)
-                            sb.AppendLine("      └ (Items пусто)");
-                    }
-
-                    if (++index >= 30)
-                    {
-                        sb.AppendLine("    …(дальше обрезано)");
-                        break;
-                    }
-                }
-            }
-
-            return sb.ToString();
+            int childrenCount = System.Windows.Media.VisualTreeHelper.GetChildrenCount(current);
+            for (int i = 0; i < childrenCount; i++)
+                CollectText(System.Windows.Media.VisualTreeHelper.GetChild(current, i), sb, depth + 1);
         }
 
-        /// <summary>Краткое описание элемента ленты: тип, подписи, состояние.</summary>
-        private static string DescribeCompact(object entry)
+        // ------------------------------------------------------------------ лента
+
+        private static System.Windows.Media.Visual GetRibbon()
         {
-            string type = entry.GetType().Name;
-            string title = GetString(entry, "Title");
-            string text = GetString(entry, "Text");
-            string automationName = GetString(entry, "AutomationName");
-            object isChecked = GetProperty(entry, "IsChecked");
-            string state = isChecked is bool b ? ((bool)b ? "ВКЛ" : "выкл") : "-";
-
-            return type
-                + " | Title=\"" + (title ?? "-") + "\""
-                + " | Text=\"" + (text ?? "-") + "\""
-                + " | AutomationName=\"" + (automationName ?? "-") + "\""
-                + " | IsChecked=" + state;
-        }
-
-        private static DateTime _lastDumpLogUtc = DateTime.MinValue;
-
-        private static object GetRibbon()
-        {
-            if (_componentManagerType != null)
-                return GetStaticProperty(_componentManagerType, "Ribbon");
-
-            // Ищем тип Autodesk.Windows.ComponentManager среди ВСЕХ загруженных
-            // сборок (имя сборки ленты может отличаться от ожидаемого).
-            Assembly sourceAssembly = null;
-
             foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
-                Type type = null;
-                try
-                {
-                    type = assembly.GetType("Autodesk.Windows.ComponentManager");
-                }
-                catch
-                {
-                    continue;
-                }
-
-                if (type == null)
+                if (!string.Equals(assembly.GetName().Name, "UIFramework", StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                sourceAssembly = assembly;
-                _componentManagerType = type;
-                Log("ComponentManager найден в сборке: " + sourceAssembly.GetName().Name +
-                    ", свойство Ribbon: " + (GetStaticProperty(type, "Ribbon") != null));
-                break;
+                Type type = assembly.GetType("Autodesk.Windows.ComponentManager");
+                object ribbon = type == null ? null : GetStaticProperty(type, "Ribbon");
+
+                return ribbon as System.Windows.Media.Visual;
             }
 
-            if (_componentManagerType == null)
-            {
-                LogThrottled("тип Autodesk.Windows.ComponentManager не найден ни в одной из " +
-                    AppDomain.CurrentDomain.GetAssemblies().Length + " загруженных сборок");
-                return null;
-            }
-
-            return GetStaticProperty(_componentManagerType, "Ribbon");
+            return null;
         }
 
-        /// <summary>Это кнопка нашего плагина? Наш код добавляет к подписи
-        /// суффикс состояния «: ВКЛ» / «: ВЫКЛ» — у кнопок Revit его не бывает.</summary>
-        private static bool IsOwnButtonName(string name)
-        {
-            if (string.IsNullOrEmpty(name))
-                return false;
-
-            string trimmed = name.TrimEnd();
-
-            return trimmed.EndsWith(": ВКЛ", StringComparison.OrdinalIgnoreCase)
-                || trimmed.EndsWith(": ВЫКЛ", StringComparison.OrdinalIgnoreCase);
-        }
-
-        /// <summary>Ищет целевую фразу во всех строковых свойствах элемента
-        /// (Title, Text, AutomationName, ToolTip, Description и т.д.).</summary>
-        private static bool MatchesTarget(object entry)
+        private static object GetStaticProperty(Type type, string name)
         {
             try
             {
-                foreach (PropertyInfo property in entry.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
-                {
-                    if (property.PropertyType != typeof(string))
-                        continue;
-
-                    string value = null;
-                    try
-                    {
-                        value = property.GetValue(entry, null) as string;
-                    }
-                    catch
-                    {
-                    }
-
-                    if (string.IsNullOrEmpty(value))
-                        continue;
-
-                    if (MatchesTargetPhrase(value))
-                    {
-                        return true;
-                    }
-                }
+                PropertyInfo property = type.GetProperty(name, BindingFlags.Public | BindingFlags.Static);
+                return property == null ? null : property.GetValue(null, null);
             }
             catch
             {
+                return null;
             }
-
-            return false;
         }
+
+        // ------------------------------------------------------------------ фраза и лог
 
         /// <summary>Целевая фраза: текст (без пробелов и переносов строк, в нижнем
         /// регистре) содержит «наследоватьотметку», «наследованиеотметок» или
@@ -537,256 +252,6 @@ namespace SheetViewsMap
                 .ToLowerInvariant();
         }
 
-        /// <summary>
-        /// Фолбэк-скан: полный обход модели ленты (рефлексией). Для каждого объекта,
-        /// у которого хоть одно строковое свойство содержит целевую фразу, пишет
-        /// кандидата в лог; если у кандидата есть булево IsChecked - включает его.
-        /// </summary>
-        private static void ScanForTarget(object obj, int depth, HashSet<object> visited)
-        {
-            if (obj == null || depth > 8 || visited.Contains(obj) || _scanLines > 200)
-                return;
-
-            visited.Add(obj);
-
-            // Пропуск собственной вкладки и собственной кнопки плагина.
-            string ownCheck = GetString(obj, "Title") ?? GetString(obj, "AutomationName") ?? string.Empty;
-            if (string.Equals(ownCheck, App.RibbonTabName, StringComparison.OrdinalIgnoreCase)
-                || IsOwnButtonName(ownCheck))
-                return;
-
-            object isChecked = GetProperty(obj, "IsChecked");
-            bool hasToggle = isChecked is bool;
-
-            string matchedProperty = null;
-            string matchedValue = null;
-
-            try
-            {
-                foreach (PropertyInfo property in obj.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
-                {
-                    if (property.PropertyType != typeof(string))
-                        continue;
-
-                    string value = null;
-                    try
-                    {
-                        value = property.GetValue(obj, null) as string;
-                    }
-                    catch
-                    {
-                        continue;
-                    }
-
-                    if (string.IsNullOrEmpty(value))
-                        continue;
-
-                    if (MatchesTargetPhrase(value))
-                    {
-                        matchedProperty = property.Name;
-                        matchedValue = value;
-                        break;
-                    }
-                }
-            }
-            catch
-            {
-                return;
-            }
-
-            if (matchedProperty != null)
-            {
-                if (hasToggle)
-                {
-                    bool on = (bool)isChecked;
-                    if (!on)
-                    {
-                        SetProperty(obj, "IsChecked", true);
-                        _lastApplyUtc = DateTime.UtcNow;
-                    }
-
-                    Log("скан: переключатель " + (on ? "уже включён" : "включён") + " — " +
-                        obj.GetType().Name + "." + matchedProperty + " = \"" + matchedValue.Trim() + "\"");
-                }
-                else
-                {
-                    Log("скан: кандидат без IsChecked — " + obj.GetType().Name + "." +
-                        matchedProperty + " = \"" + matchedValue.Trim() + "\"");
-                }
-            }
-
-            // Рекурсия по свойствам-объектам и коллекциям.
-            try
-            {
-                foreach (PropertyInfo property in obj.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
-                {
-                    if (property.PropertyType == typeof(string) || property.PropertyType.IsPrimitive)
-                        continue;
-
-                    object value = null;
-                    try
-                    {
-                        value = property.GetValue(obj, null);
-                    }
-                    catch
-                    {
-                        continue;
-                    }
-
-                    if (value == null || value is string || visited.Contains(value))
-                        continue;
-
-                    if (value is IEnumerable enumerable && !(value is string))
-                    {
-                        foreach (object child in enumerable)
-                        {
-                            ScanForTarget(child, depth + 1, visited);
-
-                            if (_scanLines > 200)
-                                return;
-                        }
-                    }
-                    else
-                    {
-                        ScanForTarget(value, depth + 1, visited);
-                    }
-                }
-            }
-            catch
-            {
-            }
-        }
-
-        private static bool WalkItems(object items, DateTime nowUtc, int depth)
-        {
-            if (items == null || depth > 5)
-                return false;
-
-            foreach (object entry in Each(items))
-            {
-                if (entry == null)
-                    continue;
-
-                // Наша собственная кнопка «Наследовать отметку: ВКЛ» - пропускаем.
-                if (IsOwnButtonName(GetString(entry, "AutomationName") ?? string.Empty)
-                    || IsOwnButtonName(GetString(entry, "Title") ?? string.Empty)
-                    || IsOwnButtonName(GetString(entry, "Text") ?? string.Empty))
-                    continue;
-
-                string text = GetString(entry, "Title") ?? GetString(entry, "Text") ?? GetString(entry, "AutomationName") ?? string.Empty;
-                bool matches = MatchesTarget(entry);
-
-                string typeName = entry.GetType().Name;
-
-                // Переключатель: включаем, если выключен.
-                if (matches)
-                {
-                    object isChecked = GetProperty(entry, "IsChecked");
-                    if (isChecked is bool && !(bool)isChecked)
-                    {
-                        SetProperty(entry, "IsChecked", true);
-                        _lastApplyUtc = nowUtc;
-                        Log("включена: \"" + text.Trim() + "\" (" + typeName + ")");
-                    }
-
-                    return true;
-                }
-
-                // Контейнеры (сплит/пулдаун-кнопки) обходим рекурсивно.
-                object inner = GetProperty(entry, "Items");
-                if (inner != null)
-                {
-                    if (matches && typeName == "RibbonSplitButton")
-                    {
-                        object isChecked = GetProperty(entry, "IsChecked");
-                        bool on = isChecked is bool && (bool)isChecked;
-
-                        if (!on)
-                        {
-                            SetProperty(entry, "IsChecked", true);
-                            _lastApplyUtc = nowUtc;
-                            Log("включен сплит: \"" + text.Trim() + "\"");
-                        }
-
-                        return true;
-                    }
-
-                    if (WalkItems(inner, nowUtc, depth + 1))
-                        return true;
-                }
-
-                // Элемент-коллекция (панель/группа кнопок) - тоже обходим:
-                // коллекции Autodesk.Windows не имеют свойства Items.
-                if (entry is IEnumerable entryCollection && !(entry is string))
-                {
-                    if (WalkItems(entryCollection, nowUtc, depth + 1))
-                        return true;
-                }
-            }
-
-            return false;
-        }
-
-        // ------------------------------------------------------------------ рефлексия
-
-        private static IEnumerable Each(object collection)
-        {
-            var enumerable = collection as IEnumerable;
-            if (enumerable != null)
-                return enumerable;
-
-            // Не-коллекция (например, свойство вернуло null) - пустой набор.
-            return new object[0];
-        }
-
-        private static object GetProperty(object target, string name)
-        {
-            if (target == null)
-                return null;
-
-            try
-            {
-                PropertyInfo property = target.GetType().GetProperty(name);
-                return property == null ? null : property.GetValue(target, null);
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private static string GetString(object target, string name)
-        {
-            object value = GetProperty(target, name);
-            return value as string;
-        }
-
-        private static object GetStaticProperty(Type type, string name)
-        {
-            try
-            {
-                PropertyInfo property = type.GetProperty(name, BindingFlags.Public | BindingFlags.Static);
-                return property == null ? null : property.GetValue(null, null);
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private static void SetProperty(object target, string name, object value)
-        {
-            try
-            {
-                target.GetType().GetProperty(name)?.SetValue(target, value, null);
-            }
-            catch
-            {
-            }
-        }
-
-        // ------------------------------------------------------------------ лог
-
         private static void Log(string message)
         {
             string line = "[" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "] " + message;
@@ -807,14 +272,14 @@ namespace SheetViewsMap
             }
         }
 
-        /// <summary>«Не найдено» пишем не чаще раза в 30 секунд, чтобы лог не разбухал.</summary>
+        /// <summary>Редкие события пишем не чаще раза в 30 секунд.</summary>
         private static void LogThrottled(string message)
         {
             DateTime nowUtc = DateTime.UtcNow;
-            if (nowUtc - _lastNotFoundLogUtc < TimeSpan.FromSeconds(30))
+            if (nowUtc - _lastThrottledLogUtc < ThrottledLogInterval)
                 return;
 
-            _lastNotFoundLogUtc = nowUtc;
+            _lastThrottledLogUtc = nowUtc;
             Log(message);
         }
     }

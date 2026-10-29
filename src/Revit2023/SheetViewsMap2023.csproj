@@ -73,4 +73,10 @@
 
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Режим «Наследование отметок»: нажатие кнопки ленты через AutomationPeer. -->
+    <Reference Include="UIAutomationClient" />
+    <Reference Include="UIAutomationTypes" />
+    <Reference Include="UIAutomationProvider" />
+  </ItemGroup>
 </Project>
