@@ -506,15 +506,35 @@ namespace SheetViewsMap
             return false;
         }
 
-        /// <summary>Целевая фраза: текст содержит «наследован…» и «отмет…».
-        /// Покрывает «Наследовать отметку» и «Наследование отметок».</summary>
+        /// <summary>Целевая фраза: текст (без пробелов и переносов строк, в нижнем
+        /// регистре) содержит «наследоватьотметку», «наследованиеотметок» или
+        /// «inheritelevation». Подписи двухстрочных кнопок Revit склеивает
+        /// без пробела («Наследоватьотметку»).</summary>
         private static bool MatchesTargetPhrase(string value)
         {
             if (string.IsNullOrEmpty(value))
                 return false;
 
-            return value.IndexOf("наследован", StringComparison.OrdinalIgnoreCase) >= 0
-                && value.IndexOf("отмет", StringComparison.OrdinalIgnoreCase) >= 0;
+            string normalized = NormalizeForMatch(value);
+
+            return normalized.Contains("наследоватьотметку")
+                || normalized.Contains("наследованиеотметок")
+                || normalized.Contains("inheritelevation");
+        }
+
+        /// <summary>Убирает пробелы и переводы строк, приводит к нижнему регистру.</summary>
+        private static string NormalizeForMatch(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return string.Empty;
+
+            return value
+                .Replace(" ", string.Empty)
+                .Replace("\n", string.Empty)
+                .Replace("\r", string.Empty)
+                .Replace("\u00A0", string.Empty)
+                .Replace("\u202F", string.Empty)
+                .ToLowerInvariant();
         }
 
         /// <summary>
