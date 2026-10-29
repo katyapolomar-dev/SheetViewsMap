@@ -371,6 +371,21 @@ namespace SheetViewsMap
                 {
                     sb.AppendLine("    " + DescribeCompact(entry));
 
+                    // Контейнеры (RibbonFoldPanel и т.п.): показываем содержимое.
+                    object inner = GetProperty(entry, "Items");
+                    if (inner != null)
+                    {
+                        int innerCount = 0;
+                        foreach (object child in Each(inner))
+                        {
+                            innerCount++;
+                            sb.AppendLine("      └ " + DescribeCompact(child));
+                        }
+
+                        if (innerCount == 0)
+                            sb.AppendLine("      └ (Items пусто)");
+                    }
+
                     if (++index >= 30)
                     {
                         sb.AppendLine("    …(дальше обрезано)");
