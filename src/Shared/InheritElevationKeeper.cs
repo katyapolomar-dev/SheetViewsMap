@@ -171,49 +171,133 @@ namespace SheetViewsMap
                 (tabTitles.Count > 0 ? string.Join(" | ", tabTitles.ToArray()) : "нет"));
         }
 
+        private static int _dumpLines;
+
         private static string DumpObject(object obj, int depth)
+        {
+            var visited = new HashSet<object>();
+            _dumpLines = 0;
+            return DumpObject(obj, depth, visited);
+        }
+
+        private static string DumpObject(object obj, int depth, HashSet<object> visited)
         {
             if (obj == null)
                 return "(null)";
 
-            var indent = new string(' ', depth * 2);
+            if (_dumpLines > 300)
+                return "…(лог обрезан по размеру)";
+
             var sb = new StringBuilder();
+            string indent = new string(' ', depth * 2);
+            Type type = obj.GetType();
 
-            string typeName = obj.GetType().Name;
-            string title = GetString(obj, "Title");
-            string text = GetString(obj, "Text");
-            object isChecked = GetProperty(obj, "IsChecked");
-            object items = GetProperty(obj, "Items");
-            object source = GetProperty(obj, "Source");
+            sb.Append(indent).AppendLine(type.Name + " {");
+            _dumpLines++;
 
-            sb.Append(indent).Append(typeName)
-              .Append(": Title=\"").Append(title ?? "-")
-              .Append("\", Text=\"").Append(text ?? "-")
-              .Append("\", IsChecked=").Append(isChecked is bool b ? b.ToString() : "-");
-
-            int itemCount = 0;
-            if (items != null)
+            PropertyInfo[] properties;
+            try
             {
-                foreach (object entry in Each(items))
-                    itemCount++;
-                sb.Append(", Items=").Append(itemCount);
+                properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
             }
-
-            sb.AppendLine();
-
-            if (depth >= 5)
+            catch (Exception ex)
+            {
+                sb.Append(indent).AppendLine("  <ошибка получения свойств: " + ex.Message + ">");
                 return sb.ToString();
-
-            if (source != null)
-                sb.Append(DumpObject(source, depth + 1));
-
-            if (items != null)
-            {
-                foreach (object child in Each(items))
-                    sb.Append(DumpObject(child, depth + 1));
             }
 
+            foreach (PropertyInfo property in properties.OrderBy(p => p.Name))
+            {
+                if (_dumpLines > 300)
+                {
+                    sb.Append(indent).AppendLine("  …(обрезано)");
+                    break;
+                }
+
+                object value;
+                try
+                {
+                    value = property.GetValue(obj, null);
+                }
+                catch (Exception ex)
+                {
+                    sb.Append(indent).Append("  ").Append(property.Name).Append(" = <ошибка: ").Append(ex.Message).AppendLine(">");
+                    _dumpLines++;
+                    continue;
+                }
+
+                sb.Append(indent).Append("  ").Append(property.Name).Append(" = ").AppendLine(Preview(value));
+                _dumpLines++;
+
+                // Рекурсивно заходим в объекты, похожие на элементы ленты/вкладки.
+                if (depth < 3 && value != null && !value.GetType().IsPrimitive && !(value is string))
+                {
+                    string valueTypeName = value.GetType().Name;
+                    if (valueTypeName.Contains("Ribbon") || valueTypeName.Contains("Tab") || valueTypeName.Contains("Panel"))
+                    {
+                        if (!visited.Contains(value))
+                        {
+                            visited.Add(value);
+                            sb.Append(DumpObject(value, depth + 1, visited));
+                        }
+                    }
+                }
+            }
+
+            // Стандартные контейнеры.
+            if (depth < 4)
+            {
+                object source = GetProperty(obj, "Source");
+                if (source != null && !visited.Contains(source))
+                {
+                    visited.Add(source);
+                    sb.Append(DumpObject(source, depth + 1, visited));
+                }
+
+                object items = GetProperty(obj, "Items");
+                if (items != null)
+                {
+                    int index = 0;
+                    foreach (object child in Each(items))
+                    {
+                        if (!visited.Contains(child))
+                        {
+                            visited.Add(child);
+                            sb.Append(DumpObject(child, depth + 1, visited));
+                        }
+
+                        if (++index >= 40)
+                        {
+                            sb.Append(indent).AppendLine("  …(показаны первые 40 элементов)");
+                            break;
+                        }
+                    }
+                }
+            }
+
+            sb.Append(indent).AppendLine("}");
             return sb.ToString();
+        }
+
+        private static string Preview(object value)
+        {
+            if (value == null)
+                return "null";
+
+            if (value is bool b)
+                return b.ToString();
+
+            if (value is string s)
+                return "\"" + (s.Length > 80 ? s.Substring(0, 80) + "…" : s) + "\"";
+
+            if (value is int || value is long || value is short || value is double)
+                return value.ToString();
+
+            string text = value.ToString();
+            if (text.Length > 60)
+                text = text.Substring(0, 60) + "…";
+
+            return "(" + value.GetType().Name + ") " + text;
         }
 
         private static DateTime _lastDumpLogUtc = DateTime.MinValue;
