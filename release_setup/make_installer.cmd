@@ -51,9 +51,19 @@ if errorlevel 1 (
 echo.
 
 rem --- 2. Build DLLs for versions with Revit installed ---
+rem Версия 2025 собирается всегда (NuGet-fallback RevitAPI работает без
+rem установленного Revit 2025) - иначе после поднятия версии в Version.txt
+rem DLL 2025 остаётся со старой версией, как это случилось с релизом v1.2.1.
 for %%V in (%VERSIONS%) do (
     if exist "%ProgramFiles%\Autodesk\Revit %%V\RevitAPI.dll" (
         echo --- Building plugin for Revit %%V ---
+        dotnet build "%ROOT%\src\Revit%%V\SheetViewsMap%%V.csproj" -c Release -p:RevitVersion=%%V
+        if errorlevel 1 (
+            echo [%%V] BUILD FAILED. See messages above.
+            exit /b 1
+        )
+    ) else if "%%V"=="2025" (
+        echo --- Revit %%V not installed, building via NuGet fallback ---
         dotnet build "%ROOT%\src\Revit%%V\SheetViewsMap%%V.csproj" -c Release -p:RevitVersion=%%V
         if errorlevel 1 (
             echo [%%V] BUILD FAILED. See messages above.
