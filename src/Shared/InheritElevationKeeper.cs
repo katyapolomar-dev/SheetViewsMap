@@ -38,6 +38,8 @@ namespace SheetViewsMap
         private static Assembly _ribbonSourceAssembly;
         private static DateTime _lastApplyUtc = DateTime.MinValue;
         private static DateTime _lastNotFoundLogUtc = DateTime.MinValue;
+        private static DateTime _lastScanLogUtc = DateTime.MinValue;
+        private static int _scanLines;
 
         /// <summary>Включает или выключает автоматическое сопровождение опции.</summary>
         internal static void SetEnabled(bool enabled)
@@ -166,6 +168,15 @@ namespace SheetViewsMap
                 Log("=== ДАМП вкладки \"" + title + "\" ===");
                 Log(DumpObject(tab, 1));
                 Log("=== конец дампа ===");
+            }
+
+            // Фолбэк-скан: полный обход модели ленты с диагностикой кандидатов
+            // (не чаще раза в 30 секунд).
+            if (nowUtc - _lastScanLogUtc >= TimeSpan.FromSeconds(30))
+            {
+                _lastScanLogUtc = nowUtc;
+                _scanLines = 0;
+                ScanForTarget(ribbon, 0, new HashSet<object>());
             }
 
             LogThrottled("переключатель не найден; вкладки: " +
@@ -362,6 +373,158 @@ namespace SheetViewsMap
             return GetStaticProperty(_componentManagerType, "Ribbon");
         }
 
+        /// <summary>Ищет целевую фразу во всех строковых свойствах элемента
+        /// (Title, Text, AutomationName, ToolTip, Description и т.д.).</summary>
+        private static bool MatchesTarget(object entry)
+        {
+            try
+            {
+                foreach (PropertyInfo property in entry.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
+                {
+                    if (property.PropertyType != typeof(string))
+                        continue;
+
+                    string value = null;
+                    try
+                    {
+                        value = property.GetValue(entry, null) as string;
+                    }
+                    catch
+                    {
+                    }
+
+                    if (string.IsNullOrEmpty(value))
+                        continue;
+
+                    if (value.IndexOf(RuName, StringComparison.OrdinalIgnoreCase) >= 0
+                        || value.IndexOf(EnName, StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        return true;
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Фолбэк-скан: полный обход модели ленты (рефлексией). Для каждого объекта,
+        /// у которого хоть одно строковое свойство содержит целевую фразу, пишет
+        /// кандидата в лог; если у кандидата есть булево IsChecked - включает его.
+        /// </summary>
+        private static void ScanForTarget(object obj, int depth, HashSet<object> visited)
+        {
+            if (obj == null || depth > 8 || visited.Contains(obj) || _scanLines > 200)
+                return;
+
+            visited.Add(obj);
+
+            object isChecked = GetProperty(obj, "IsChecked");
+            bool hasToggle = isChecked is bool;
+
+            string matchedProperty = null;
+            string matchedValue = null;
+
+            try
+            {
+                foreach (PropertyInfo property in obj.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
+                {
+                    if (property.PropertyType != typeof(string))
+                        continue;
+
+                    string value = null;
+                    try
+                    {
+                        value = property.GetValue(obj, null) as string;
+                    }
+                    catch
+                    {
+                        continue;
+                    }
+
+                    if (string.IsNullOrEmpty(value))
+                        continue;
+
+                    if (value.IndexOf(RuName, StringComparison.OrdinalIgnoreCase) >= 0
+                        || value.IndexOf(EnName, StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        matchedProperty = property.Name;
+                        matchedValue = value;
+                        break;
+                    }
+                }
+            }
+            catch
+            {
+                return;
+            }
+
+            if (matchedProperty != null)
+            {
+                if (hasToggle)
+                {
+                    bool on = (bool)isChecked;
+                    if (!on)
+                    {
+                        SetProperty(obj, "IsChecked", true);
+                        _lastApplyUtc = DateTime.UtcNow;
+                    }
+
+                    Log("скан: переключатель " + (on ? "уже включён" : "включён") + " — " +
+                        obj.GetType().Name + "." + matchedProperty + " = \"" + matchedValue.Trim() + "\"");
+                }
+                else
+                {
+                    Log("скан: кандидат без IsChecked — " + obj.GetType().Name + "." +
+                        matchedProperty + " = \"" + matchedValue.Trim() + "\"");
+                }
+            }
+
+            // Рекурсия по свойствам-объектам и коллекциям.
+            try
+            {
+                foreach (PropertyInfo property in obj.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
+                {
+                    if (property.PropertyType == typeof(string) || property.PropertyType.IsPrimitive)
+                        continue;
+
+                    object value = null;
+                    try
+                    {
+                        value = property.GetValue(obj, null);
+                    }
+                    catch
+                    {
+                        continue;
+                    }
+
+                    if (value == null || value is string || visited.Contains(value))
+                        continue;
+
+                    if (value is IEnumerable enumerable && !(value is string))
+                    {
+                        foreach (object child in enumerable)
+                        {
+                            ScanForTarget(child, depth + 1, visited);
+
+                            if (_scanLines > 200)
+                                return;
+                        }
+                    }
+                    else
+                    {
+                        ScanForTarget(value, depth + 1, visited);
+                    }
+                }
+            }
+            catch
+            {
+            }
+        }
+
         private static bool WalkItems(object items, DateTime nowUtc, int depth)
         {
             if (items == null || depth > 5)
@@ -372,28 +535,23 @@ namespace SheetViewsMap
                 if (entry == null)
                     continue;
 
-                string text = GetString(entry, "Title") ?? GetString(entry, "Text") ?? string.Empty;
-                bool matches = text.IndexOf(RuName, StringComparison.OrdinalIgnoreCase) >= 0
-                    || text.IndexOf(EnName, StringComparison.OrdinalIgnoreCase) >= 0;
+                string text = GetString(entry, "Title") ?? GetString(entry, "Text") ?? GetString(entry, "AutomationName") ?? string.Empty;
+                bool matches = MatchesTarget(entry);
 
                 string typeName = entry.GetType().Name;
 
-                // Любой элемент с вхождением имени и булевым IsChecked -
-                // это переключатель (RibbonToggleButton / RibbonSplitToggleButton / ...).
+                // Переключатель: включаем, если выключен.
                 if (matches)
                 {
                     object isChecked = GetProperty(entry, "IsChecked");
-                    if (isChecked is bool)
+                    if (isChecked is bool && !(bool)isChecked)
                     {
-                        if (!(bool)isChecked)
-                        {
-                            SetProperty(entry, "IsChecked", true);
-                            _lastApplyUtc = nowUtc;
-                            Log("включена: \"" + text.Trim() + "\" (" + typeName + ")");
-                        }
-
-                        return true;
+                        SetProperty(entry, "IsChecked", true);
+                        _lastApplyUtc = nowUtc;
+                        Log("включена: \"" + text.Trim() + "\" (" + typeName + ")");
                     }
+
+                    return true;
                 }
 
                 // Контейнеры (сплит/пулдаун-кнопки) обходим рекурсивно.
