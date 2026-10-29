@@ -113,6 +113,29 @@ namespace SheetViewsMap
                 }
             }
 
+            // Контекстные вкладки (черчение труб и т.п.) хранятся отдельно.
+            object contextual = GetProperty(ribbon, "ContextualTabs");
+            if (contextual != null)
+            {
+                foreach (object tab in Each(contextual))
+                {
+                    tabTitles.Add(GetString(tab, "Title") ?? "?");
+
+                    object panels = GetProperty(tab, "Panels");
+                    if (panels == null)
+                        continue;
+
+                    foreach (object panel in Each(panels))
+                    {
+                        object source = GetProperty(panel, "Source");
+                        object items = source == null ? null : GetProperty(source, "Items");
+
+                        if (items != null && WalkItems(items, nowUtc, 0))
+                            return;
+                    }
+                }
+            }
+
             LogThrottled("переключатель не найден; вкладки: " +
                 (tabTitles.Count > 0 ? string.Join(" | ", tabTitles.ToArray()) : "нет"));
         }
