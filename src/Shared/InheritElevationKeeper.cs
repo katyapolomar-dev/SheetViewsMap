@@ -96,11 +96,13 @@ namespace SheetViewsMap
                 return;
 
             var tabTitles = new List<string>();
+            var tabObjects = new List<object>();
 
             foreach (object tab in Each(tabs))
             {
                 string tabTitle = GetString(tab, "Title") ?? "?";
                 tabTitles.Add(tabTitle);
+                tabObjects.Add(tab);
 
                 // Своя вкладка ("Sheet Views Map"): на ней лежит наша кнопка
                 // «Наследовать отметку: ВКЛ» — пропускаем, чтобы поиск не
@@ -128,7 +130,9 @@ namespace SheetViewsMap
             {
                 foreach (object tab in Each(contextual))
                 {
-                    tabTitles.Add(GetString(tab, "Title") ?? "?");
+                    string ctxTitle = GetString(tab, "Title") ?? "?";
+                    tabTitles.Add(ctxTitle);
+                    tabObjects.Add(tab);
 
                     object panels = GetProperty(tab, "Panels");
                     if (panels == null)
@@ -145,9 +149,74 @@ namespace SheetViewsMap
                 }
             }
 
+            // Диагностика: если инструмент трубопровода активен (есть вкладка
+            // с «Труба» в названии), но переключатель не найден - раз в 30 секунд
+            // пишем полный дамп содержимого этой вкладки.
+            foreach (object tab in tabObjects)
+            {
+                string title = GetString(tab, "Title") ?? string.Empty;
+                if (title.IndexOf("Труба", StringComparison.OrdinalIgnoreCase) < 0)
+                    continue;
+
+                if (nowUtc - _lastDumpLogUtc < TimeSpan.FromSeconds(30))
+                    continue;
+
+                _lastDumpLogUtc = nowUtc;
+                Log("=== ДАМП вкладки \"" + title + "\" ===");
+                Log(DumpObject(tab, 1));
+                Log("=== конец дампа ===");
+            }
+
             LogThrottled("переключатель не найден; вкладки: " +
                 (tabTitles.Count > 0 ? string.Join(" | ", tabTitles.ToArray()) : "нет"));
         }
+
+        private static string DumpObject(object obj, int depth)
+        {
+            if (obj == null)
+                return "(null)";
+
+            var indent = new string(' ', depth * 2);
+            var sb = new StringBuilder();
+
+            string typeName = obj.GetType().Name;
+            string title = GetString(obj, "Title");
+            string text = GetString(obj, "Text");
+            object isChecked = GetProperty(obj, "IsChecked");
+            object items = GetProperty(obj, "Items");
+            object source = GetProperty(obj, "Source");
+
+            sb.Append(indent).Append(typeName)
+              .Append(": Title=\"").Append(title ?? "-")
+              .Append("\", Text=\"").Append(text ?? "-")
+              .Append("\", IsChecked=").Append(isChecked is bool b ? b.ToString() : "-");
+
+            int itemCount = 0;
+            if (items != null)
+            {
+                foreach (object entry in Each(items))
+                    itemCount++;
+                sb.Append(", Items=").Append(itemCount);
+            }
+
+            sb.AppendLine();
+
+            if (depth >= 5)
+                return sb.ToString();
+
+            if (source != null)
+                sb.Append(DumpObject(source, depth + 1));
+
+            if (items != null)
+            {
+                foreach (object child in Each(items))
+                    sb.Append(DumpObject(child, depth + 1));
+            }
+
+            return sb.ToString();
+        }
+
+        private static DateTime _lastDumpLogUtc = DateTime.MinValue;
 
         private static object GetRibbon()
         {
