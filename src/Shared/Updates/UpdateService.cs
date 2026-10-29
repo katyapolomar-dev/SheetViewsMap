@@ -11,7 +11,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using System.Web.Script.Serialization;
+using Newtonsoft.Json;
 
 namespace SheetViewsMap.Updates
 {
@@ -348,8 +348,20 @@ namespace SheetViewsMap.Updates
 
         private ReleaseInfo ParseLatestStableRelease(string json, string currentVersion)
         {
-            var serializer = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
-            GitHubRelease[] releases = serializer.Deserialize<GitHubRelease[]>(json) ?? new GitHubRelease[0];
+            List<GitHubRelease> parsed;
+
+            try
+            {
+                // Newtonsoft сопоставляет имена полей GitHub API со свойствами
+                // без учёта регистра - атрибуты не нужны.
+                parsed = JsonConvert.DeserializeObject<List<GitHubRelease>>(json) ?? new List<GitHubRelease>();
+            }
+            catch (JsonException ex)
+            {
+                throw new InvalidOperationException("Не удалось разобрать ответ GitHub: " + ex.Message, ex);
+            }
+
+            GitHubRelease[] releases = parsed.ToArray();
 
             string latestVersion = null;
             GitHubRelease latest = null;

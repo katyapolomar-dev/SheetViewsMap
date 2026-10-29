@@ -47,6 +47,7 @@
       к DLL берутся через свойство PkgRevit_All_Main_Versions_API_x64 ниже.
     -->
     <PackageReference Include="Revit_All_Main_Versions_API_x64" Version="2025.0.0" PrivateAssets="all" ExcludeAssets="all" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" PrivateAssets="all" ExcludeAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
@@ -72,8 +73,12 @@
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
 
-    <!-- Проверка обновлений: разбор ответа GitHub API и скачивание. -->
-    <Reference Include="System.Web.Extensions" />
+    <!-- Проверка обновлений: разбор ответа GitHub API (Newtonsoft из Revit, fallback - NuGet) и скачивание. -->
+    <Reference Include="Newtonsoft.Json">
+      <HintPath Condition="Exists('$(RevitDir)Newtonsoft.Json.dll')">$(RevitDir)Newtonsoft.Json.dll</HintPath>
+      <HintPath Condition="!Exists('$(RevitDir)Newtonsoft.Json.dll')">$(NuGetPackageRoot)newtonsoft.json\13.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="System.Net.Http" />
     <Reference Include="System.IO.Compression" />
     <Reference Include="System.IO.Compression.FileSystem" />
