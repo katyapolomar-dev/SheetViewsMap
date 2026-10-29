@@ -18,7 +18,7 @@ set "SETUP_DIR=%~dp0"
 for %%I in ("%SETUP_DIR%..") do set "ROOT=%%~fI"
 set "STAGE=%SETUP_DIR%out"
 set "VERSIONS=2021 2025"
-set "APP_VERSION=1.2.0"
+set "APP_VERSION=1.2.1"
 rem Единый источник версии - Version.txt; здесь меняем при выпуске релиза.
 set "OUTPUT_NAME=SheetViewsMap_Setup_v%APP_VERSION%.exe"
 
