@@ -74,9 +74,9 @@ namespace SheetViewsMap
 
             try
             {
-                // Корень визуального дерева ленты - WPF-элемент; его обход
-                // выполняется на потоке Revit и ничего не блокирует.
-                if (!(GetRibbon() is System.Windows.Media.Visual ribbonVisual))
+                // Корень визуального дерева ленты - DependencyObject (WPF-элемент);
+                // обход выполняется на потоке Revit и ничего не блокирует.
+                if (!(GetRibbon() is System.Windows.DependencyObject ribbonVisual))
                 {
                     LogThrottled("лента недоступна");
                     return;
@@ -94,8 +94,8 @@ namespace SheetViewsMap
 
         private static void TryClickInheritElevationToggle(System.Windows.DependencyObject root, DateTime nowUtc)
         {
-            var stack = new System.Collections.Generic.Stack<System.Windows.Media.Visual>();
-            var visited = new System.Collections.Generic.HashSet<System.Windows.Media.Visual>();
+            var stack = new System.Collections.Generic.Stack<System.Windows.DependencyObject>();
+            var visited = new System.Collections.Generic.HashSet<System.Windows.DependencyObject>();
             int toggleButtonsSeen = 0;
             bool clicked = false;
 
@@ -103,7 +103,7 @@ namespace SheetViewsMap
 
             while (stack.Count > 0 && !clicked)
             {
-                System.Windows.Media.Visual current = stack.Pop();
+                System.Windows.DependencyObject current = stack.Pop();
 
                 if (current == null || visited.Contains(current))
                     continue;
