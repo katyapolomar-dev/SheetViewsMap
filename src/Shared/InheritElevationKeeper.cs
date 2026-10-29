@@ -1,42 +1,38 @@
 using System;
-using System.Collections.Generic;
-using System.Diagnostics;
+using System.Collections;
+using System.Globalization;
 using System.IO;
-using System.Linq;
+using System.Reflection;
 using System.Text;
-using System.Threading;
-using System.Windows.Automation;
+using System.Windows.Threading;
 
 namespace SheetViewsMap
 {
     /// <summary>
     /// Держит опцию «Наследовать отметку» включённой при черчении трубопроводов.
     ///
-    /// Опция есть только в интерфейсе Revit и не представлена в API, поэтому
-    /// используется UI Automation. Таймер работает на фоновом потоке - он тикает
-    /// и во время размещения труб, когда события Revit не приходят.
+    /// Опция не представлена в Revit API, но лента Revit — это WPF-объекты с
+    /// объектной моделью Autodesk.Windows (сборка UIFramework.dll, грузится самим
+    /// Revit'ом). Доступ через рефлексию - это работает на всех годах Revit и на
+    /// обоих рантаймах (.NET Framework и .NET 8), без ссылок на внутренние сборки.
     ///
-    /// Поиск двухпроходный: сначала точное совпадение имени, затем (раз в 5 тиков)
-    /// полный обход дерева с поиском по вхождению. Каждая попытка пишется в лог
-    /// inherit-log.txt - по нему видно, нашлась ли кнопка и почему не нажалась.
+    /// DispatcherTimer на потоке Revit раз в полсекунды обходит модель ленты,
+    /// находит переключатель «Наследовать отметку» и ставит IsChecked = true,
+    /// если он выключен. Попытки пишутся в лог inherit-log.txt.
     /// </summary>
     internal static class InheritElevationKeeper
     {
-        private const string RuName = "Наследовать отметку";
-        private const string EnName = "Inherit Elevation";
+        private const string RuName = "наследовать отметку";
+        private const string EnName = "inherit elevation";
 
-        private static readonly TimeSpan SearchInterval = TimeSpan.FromSeconds(1);
-        private static readonly TimeSpan BroadWalkInterval = TimeSpan.FromSeconds(5);
-        private static readonly TimeSpan InvokeCooldown = TimeSpan.FromSeconds(3);
+        private static readonly TimeSpan SearchInterval = TimeSpan.FromMilliseconds(500);
+        private static readonly TimeSpan ApplyCooldown = TimeSpan.FromSeconds(2);
         private static readonly string LogPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "SheetViewsMap", "inherit-log.txt");
 
-        private static Timer _timer;
-        private static int _revitProcessId = -1;
-        private static int _tick;
-        private static DateTime _lastInvokeUtc = DateTime.MinValue;
-        private static DateTime _lastBroadWalkUtc = DateTime.MinValue;
+        private static DispatcherTimer _timer;
+        private static DateTime _lastApplyUtc = DateTime.MinValue;
         private static DateTime _lastNotFoundLogUtc = DateTime.MinValue;
 
         /// <summary>Включает или выключает автоматическое сопровождение опции.</summary>
@@ -47,186 +43,206 @@ namespace SheetViewsMap
                 if (_timer != null)
                     return;
 
-                _revitProcessId = Process.GetCurrentProcess().Id;
-                Log("keeper enabled (v2)");
-                _timer = new Timer(OnTimerTick, null, TimeSpan.Zero, SearchInterval);
+                Log("keeper v4 enabled");
+                _timer = new DispatcherTimer(DispatcherPriority.Background)
+                {
+                    Interval = SearchInterval
+                };
+                _timer.Tick += OnTick;
+                _timer.Start();
             }
             else
             {
                 if (_timer == null)
                     return;
 
-                _timer.Dispose();
+                _timer.Stop();
+                _timer.Tick -= OnTick;
                 _timer = null;
                 Log("keeper disabled");
             }
         }
 
-        private static void OnTimerTick(object state)
+        private static void OnTick(object sender, EventArgs e)
         {
             DateTime nowUtc = DateTime.UtcNow;
-            if (nowUtc - _lastInvokeUtc < InvokeCooldown)
+            if (nowUtc - _lastApplyUtc < ApplyCooldown)
                 return;
 
             try
             {
-                ToggleIfNeeded(nowUtc);
+                ApplyIfNeeded(nowUtc);
             }
             catch (Exception ex)
             {
-                Log("tick error: " + ex.Message);
+                LogThrottled("tick error: " + ex.Message);
             }
         }
 
-        private static void ToggleIfNeeded(DateTime nowUtc)
+        private static void ApplyIfNeeded(DateTime nowUtc)
         {
-            AutomationElement revitWindow = GetRevitWindow();
-            if (revitWindow == null)
+            object ribbon = GetRibbon();
+            if (ribbon == null)
             {
-                LogThrottled("окно Revit не найдено");
+                LogThrottled("лента недоступна");
                 return;
             }
 
-            // Проход 1: точное имя (быстро, средствами UIA).
-            AutomationElement toggle = FindExact(revitWindow);
-
-            // Проход 2: не чаще раза в 5 секунд - полный обход дерева
-            // с поиском по вхождению и любым типом элемента.
-            bool broad = false;
-            if (toggle == null && nowUtc - _lastBroadWalkUtc >= BroadWalkInterval)
-            {
-                _lastBroadWalkUtc = nowUtc;
-                broad = true;
-                toggle = WalkAndFind(revitWindow);
-            }
-
-            if (toggle == null)
-            {
-                LogThrottled(broad
-                    ? "кнопка не найдена (инструмент трубопровода не активен или имя другое)"
-                    : "кнопка не найдена точным поиском");
+            object tabs = GetProperty(ribbon, "Tabs");
+            if (tabs == null)
                 return;
-            }
 
-            string description = Describe(toggle);
-            Log("найдена: " + description);
-
-            object pattern;
-            if (toggle.TryGetCurrentPattern(TogglePattern.Pattern, out pattern))
+            foreach (object tab in Each(tabs))
             {
-                var togglePattern = (TogglePattern)pattern;
-                ToggleState state = togglePattern.Current.ToggleState;
-                Log("TogglePattern, состояние: " + state);
-
-                if (state == ToggleState.Off)
-                {
-                    togglePattern.Toggle();
-                    _lastInvokeUtc = nowUtc;
-                    Log("нажата (Toggle)");
-                }
-
-                return;
-            }
-
-            if (toggle.TryGetCurrentPattern(SelectionItemPattern.Pattern, out pattern))
-            {
-                var selectionPattern = (SelectionItemPattern)pattern;
-                bool selected = selectionPattern.Current.IsSelected;
-                Log("SelectionItemPattern, выбран: " + selected);
-
-                if (!selected)
-                {
-                    selectionPattern.Select();
-                    _lastInvokeUtc = nowUtc;
-                    Log("нажата (Select)");
-                }
-
-                return;
-            }
-
-            // Состояние прочитать нечем: вслепую не нажимаем - можно выключить
-            // включённую опцию. Подробности в логе помогут разобраться.
-            Log("ВНИМАНИЕ: у кнопки нет Toggle/SelectionItem паттерна, состояние неизвестно - не нажимаю");
-        }
-
-        // ------------------------------------------------------------------ поиск
-
-        private static AutomationElement GetRevitWindow()
-        {
-            return AutomationElement.RootElement.FindFirst(
-                TreeScope.Children,
-                new PropertyCondition(AutomationElement.ProcessIdProperty, _revitProcessId));
-        }
-
-        private static AutomationElement FindExact(AutomationElement root)
-        {
-            var byName = new OrCondition(
-                new PropertyCondition(AutomationElement.NameProperty, RuName),
-                new PropertyCondition(AutomationElement.NameProperty, EnName));
-
-            return root.FindFirst(TreeScope.Descendants, byName);
-        }
-
-        /// <summary>Обход дерева в глубину: имя содержит целевую строку, любой тип элемента.</summary>
-        private static AutomationElement WalkAndFind(AutomationElement root)
-        {
-            var stack = new Stack<AutomationElement>();
-            stack.Push(root);
-
-            while (stack.Count > 0)
-            {
-                AutomationElement element = stack.Pop();
-
-                string name = null;
-                try
-                {
-                    name = element.Current.Name;
-                }
-                catch (ElementNotAvailableException)
-                {
+                object panels = GetProperty(tab, "Panels");
+                if (panels == null)
                     continue;
-                }
 
-                if (!string.IsNullOrEmpty(name) &&
-                    (name.IndexOf(RuName, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                     name.IndexOf(EnName, StringComparison.OrdinalIgnoreCase) >= 0))
+                foreach (object panel in Each(panels))
                 {
-                    return element;
-                }
+                    object source = GetProperty(panel, "Source");
+                    object items = source == null ? null : GetProperty(source, "Items");
 
-                AutomationElement child = TreeWalker.ControlViewWalker.GetFirstChild(element);
-                while (child != null)
-                {
-                    stack.Push(child);
-                    child = TreeWalker.ControlViewWalker.GetNextSibling(child);
+                    if (items != null && WalkItems(items, nowUtc, 0))
+                        return;
                 }
+            }
+
+            LogThrottled("переключатель не найден в модели ленты (инструмент трубопровода не активен)");
+        }
+
+        private static object GetRibbon()
+        {
+            foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                if (!string.Equals(assembly.GetName().Name, "UIFramework", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                Type type = assembly.GetType("Autodesk.Windows.ComponentManager");
+                return type == null ? null : GetStaticProperty(type, "Ribbon");
             }
 
             return null;
         }
 
-        // ------------------------------------------------------------------ лог и мелочи
+        private static bool WalkItems(object items, DateTime nowUtc, int depth)
+        {
+            if (items == null || depth > 5)
+                return false;
 
-        private static string Describe(AutomationElement element)
+            foreach (object entry in Each(items))
+            {
+                if (entry == null)
+                    continue;
+
+                string text = GetString(entry, "Title") ?? GetString(entry, "Text") ?? string.Empty;
+                bool matches = text.IndexOf(RuName, StringComparison.OrdinalIgnoreCase) >= 0
+                    || text.IndexOf(EnName, StringComparison.OrdinalIgnoreCase) >= 0;
+
+                string typeName = entry.GetType().Name;
+
+                // Переключатель: цель найдена - включаем, если выключен.
+                if (typeName == "RibbonToggleButton")
+                {
+                    object isChecked = GetProperty(entry, "IsChecked");
+                    bool on = isChecked is bool && (bool)isChecked;
+
+                    if (!on)
+                    {
+                        SetProperty(entry, "IsChecked", true);
+                        _lastApplyUtc = nowUtc;
+                        Log("включена: \"" + text.Trim() + "\"");
+                    }
+
+                    return true;
+                }
+
+                // Контейнеры (сплит/пулдаун-кнопки) обходим рекурсивно.
+                object inner = GetProperty(entry, "Items");
+                if (inner != null)
+                {
+                    if (matches && typeName == "RibbonSplitButton")
+                    {
+                        object isChecked = GetProperty(entry, "IsChecked");
+                        bool on = isChecked is bool && (bool)isChecked;
+
+                        if (!on)
+                        {
+                            SetProperty(entry, "IsChecked", true);
+                            _lastApplyUtc = nowUtc;
+                            Log("включен сплит: \"" + text.Trim() + "\"");
+                        }
+
+                        return true;
+                    }
+
+                    if (WalkItems(inner, nowUtc, depth + 1))
+                        return true;
+                }
+            }
+
+            return false;
+        }
+
+        // ------------------------------------------------------------------ рефлексия
+
+        private static IEnumerable Each(object collection)
+        {
+            var enumerable = collection as IEnumerable;
+            if (enumerable != null)
+                return enumerable;
+
+            // Не-коллекция (например, свойство вернуло null) - пустой набор.
+            return new object[0];
+        }
+
+        private static object GetProperty(object target, string name)
+        {
+            if (target == null)
+                return null;
+
+            try
+            {
+                PropertyInfo property = target.GetType().GetProperty(name);
+                return property == null ? null : property.GetValue(target, null);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static string GetString(object target, string name)
+        {
+            object value = GetProperty(target, name);
+            return value as string;
+        }
+
+        private static object GetStaticProperty(Type type, string name)
         {
             try
             {
-                var patterns = new List<string>();
-                foreach (AutomationPattern pattern in element.GetSupportedPatterns())
-                    patterns.Add(pattern.ProgrammaticName);
-
-                return string.Format(
-                    "\"{0}\" (тип {1}, класс {2}; паттерны: {3})",
-                    element.Current.Name,
-                    element.Current.ControlType,
-                    element.Current.ClassName,
-                    patterns.Count > 0 ? string.Join(", ", patterns) : "нет");
+                PropertyInfo property = type.GetProperty(name, BindingFlags.Public | BindingFlags.Static);
+                return property == null ? null : property.GetValue(null, null);
             }
-            catch (Exception ex)
+            catch
             {
-                return "(не удалось описать элемент: " + ex.Message + ")";
+                return null;
             }
         }
+
+        private static void SetProperty(object target, string name, object value)
+        {
+            try
+            {
+                target.GetType().GetProperty(name)?.SetValue(target, value, null);
+            }
+            catch
+            {
+            }
+        }
+
+        // ------------------------------------------------------------------ лог
 
         private static void Log(string message)
         {

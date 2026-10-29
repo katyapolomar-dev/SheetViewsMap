@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <!--
     Проект для одной версии Revit.
@@ -83,9 +83,7 @@
     <Reference Include="System.IO.Compression" />
     <Reference Include="System.IO.Compression.FileSystem" />
 
-    <!-- Режим «Наследовать отметку»: UI Automation для нажатия кнопки ленты. -->
-    <Reference Include="UIAutomationClient" />
-    <Reference Include="UIAutomationTypes" />
+
   </ItemGroup>
 
 </Project>
