@@ -1,0 +1,16 @@
+name: Идея
+description: Что хочется делать в плагине и что мешает сейчас
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: Идея
+      description: Опишите, что хочется делать в Revit и что сейчас приходится делать вручную.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Дополнительно
+      description: Скриншоты, примеры, ссылки — по желанию.
