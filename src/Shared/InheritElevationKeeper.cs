@@ -92,7 +92,7 @@ namespace SheetViewsMap
 
         // ------------------------------------------------------------------ поиск кнопки
 
-        private static void TryClickInheritElevationToggle(System.Windows.Media.Visual root, DateTime nowUtc)
+        private static void TryClickInheritElevationToggle(System.Windows.DependencyObject root, DateTime nowUtc)
         {
             var stack = new System.Collections.Generic.Stack<System.Windows.Media.Visual>();
             var visited = new System.Collections.Generic.HashSet<System.Windows.Media.Visual>();
@@ -161,14 +161,14 @@ namespace SheetViewsMap
         }
 
         /// <summary>Собирает весь текст кнопки из визуального дерева (TextBlock'и) и Content.</summary>
-        private static string CollectVisualText(System.Windows.Media.Visual root)
+        private static string CollectVisualText(System.Windows.DependencyObject root)
         {
             var sb = new StringBuilder();
             CollectText(root, sb, 0);
             return sb.ToString();
         }
 
-        private static void CollectText(System.Windows.Media.Visual current, StringBuilder sb, int depth)
+        private static void CollectText(System.Windows.DependencyObject current, StringBuilder sb, int depth)
         {
             if (depth > 6)
                 return;
@@ -190,7 +190,7 @@ namespace SheetViewsMap
 
         // ------------------------------------------------------------------ лента
 
-        private static System.Windows.Media.Visual GetRibbon()
+        private static System.Windows.DependencyObject GetRibbon()
         {
             foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
