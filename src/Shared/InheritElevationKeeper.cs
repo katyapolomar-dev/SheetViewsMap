@@ -274,6 +274,24 @@ namespace SheetViewsMap
                         }
                     }
                 }
+
+                // Коллекции Autodesk.Windows (RibbonPanelCollection и т.п.) - IEnumerable.
+                if (obj is IEnumerable selfCollection && !(obj is string))
+                {
+                    int index = 0;
+                    foreach (object child in Each(selfCollection))
+                    {
+                        if (_dumpLines > 300)
+                            break;
+
+                        sb.Append(DumpObject(child, depth + 1, visited));
+                        if (++index >= 40)
+                        {
+                            sb.Append(indent).AppendLine("  …(показаны первые 40 элементов)");
+                            break;
+                        }
+                    }
+                }
             }
 
             sb.Append(indent).AppendLine("}");
@@ -398,6 +416,14 @@ namespace SheetViewsMap
                     }
 
                     if (WalkItems(inner, nowUtc, depth + 1))
+                        return true;
+                }
+
+                // Элемент-коллекция (панель/группа кнопок) - тоже обходим:
+                // коллекции Autodesk.Windows не имеют свойства Items.
+                if (entry is IEnumerable entryCollection && !(entry is string))
+                {
+                    if (WalkItems(entryCollection, nowUtc, depth + 1))
                         return true;
                 }
             }
