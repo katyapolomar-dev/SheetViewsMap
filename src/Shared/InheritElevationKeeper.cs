@@ -119,34 +119,27 @@ namespace SheetViewsMap
                 bool justActivated = pipeToolActive && !_pipeToolWasActive;
                 _pipeToolWasActive = pipeToolActive;
 
+                if (justActivated)
+                {
+                    // Новое включение инструмента «Труба»: даём Revit 2,5 секунды
+                    // на инициализацию команды размещения, затем нажимаем.
+                    _clickAttemptsLeft = 5;
+                    _clickDelayUntilUtc = nowUtc.AddMilliseconds(2500);
+                }
+
                 if (!pipeToolActive)
                 {
                     LogThrottled("инструмент трубопровода не активен");
                     return;
                 }
 
-                // Одно нажатие на каждое включение инструмента: после перехода
-                // делаем до 10 попыток (по тику), пока контекстная панель
-                // «Инструменты размещения» не появится в визуальном дереве.
-                if (justActivated)
-                    _clickAttemptsLeft = 10;
+                // Инструмент активен: если переключатель выключен - нажимаем.
+                // (Держим опцию включённой всё время черчения; после успешного
+                // нажатия кулдаун 2 секунды, дальше состояние читается заново.)
+                TryClickInheritElevationToggle(ribbon, nowUtc);
 
-                if (_clickAttemptsLeft <= 0)
-                {
-                    DumpPipeTabDiagnostics(ribbon, nowUtc);
-                    return;
-                }
-
-                _clickAttemptsLeft--;
-
-                if (TryClickInheritElevationToggle(ribbon, nowUtc))
-                {
-                    _clickAttemptsLeft = 0;
-                    return;
-                }
-
-                if (_clickAttemptsLeft == 0)
-                    LogThrottled("переключатель не найден за 5 секунд после включения инструмента");
+                // Диагностика: дамп содержимого вкладки черчения (раз в 30 секунд).
+                DumpPipeTabDiagnostics(ribbon, nowUtc);
             }
             catch (Exception ex)
             {
@@ -161,13 +154,13 @@ namespace SheetViewsMap
         /// true - переключатель найден (нажат, если был выключен);
         /// false - не найден (визуальное дерево ещё не построено или режим не тот).
         /// </summary>
-        private static bool TryClickInheritElevationToggle(System.Windows.DependencyObject root, DateTime nowUtc)
+        private static bool TryClickInheritElevationToggle(object ribbon)
         {
             var stack = new Stack<System.Windows.DependencyObject>();
             var visited = new HashSet<System.Windows.DependencyObject>();
             int toggleButtonsSeen = 0;
 
-            stack.Push(root);
+            stack.Push(ribbon);
 
             while (stack.Count > 0)
             {
@@ -216,7 +209,7 @@ namespace SheetViewsMap
                                 SetCursorPos(before.X, before.Y);
                             }), DispatcherPriority.Send);
 
-                            _lastClickUtc = nowUtc;
+                            _lastClickUtc = DateTime.UtcNow;
                             Log("выполнен реальный щелчок по кнопке «Наследование отметок»");
                         }
 
