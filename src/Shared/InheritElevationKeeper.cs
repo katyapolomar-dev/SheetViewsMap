@@ -45,6 +45,25 @@ namespace SheetViewsMap
         private static DateTime _lastThrottledLogUtc = DateTime.MinValue;
         private static DateTime _lastDumpLogUtc = DateTime.MinValue;
 
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        private struct POINT
+        {
+            public int X;
+            public int Y;
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool SetCursorPos(int x, int y);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool GetCursorPos(out POINT point);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern void mouse_event(uint dwFlags, int dx, int dy, uint dwData, System.IntPtr dwExtraInfo);
+
+        private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
+        private const uint MOUSEEVENTF_LEFTUP = 0x0004;
+
         /// <summary>Активен ли инструмент черчения труб (в прошлый тик).</summary>
         private static bool _pipeToolWasActive;
 
@@ -173,23 +192,32 @@ namespace SheetViewsMap
                     if (MatchesTargetPhrase(normalized))
                     {
                         // Нашли настоящую кнопку «Наследование отметок»:
-                        // если выключена - нажимаем через AutomationPeer
-                        // (тот же код, что и при щелчке мышью).
+                        // если выключена - выполняем РЕАЛЬНЫЙ щелчок мышью
+                        // по её экранным координатам (курсор возвращается на место).
                         if (toggleButton.IsChecked != true)
                         {
                             toggleButton.Dispatcher.Invoke(new Action(() =>
                             {
-                                var peer = System.Windows.Automation.Peers.UIElementAutomationPeer.CreatePeerForElement(toggleButton);
-                                var provider = peer == null
-                                    ? null
-                                    : peer.GetPattern(System.Windows.Automation.Peers.PatternInterface.Toggle)
-                                        as System.Windows.Automation.Provider.IToggleProvider;
+                                // 1. Экранные координаты центра кнопки.
+                                var center = toggleButton.PointToScreen(
+                                    new System.Windows.Point(toggleButton.ActualWidth / 2, toggleButton.ActualHeight / 2));
+                                int targetX = (int)Math.Round(center.X);
+                                int targetY = (int)Math.Round(center.Y);
 
-                                provider?.Toggle();
+                                // 2. Запоминаем позицию курсора.
+                                GetCursorPos(out POINT before);
+
+                                // 3. Перемещаем курсор на кнопку и щёлкаем.
+                                SetCursorPos(targetX, targetY);
+                                mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, System.IntPtr.Zero);
+                                mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, System.IntPtr.Zero);
+
+                                // 4. Курсор возвращаем на прежнее место.
+                                SetCursorPos(before.X, before.Y);
                             }), DispatcherPriority.Send);
 
                             _lastClickUtc = nowUtc;
-                            Log("нажата кнопка «Наследование отметок»");
+                            Log("выполнен реальный щелчок по кнопке «Наследование отметок»");
                         }
 
                         return true;
