@@ -13,15 +13,15 @@ namespace SheetViewsMap
     /// <summary>
     /// Держит опцию «Наследование отметок» включённой при черчении трубопроводов.
     ///
-    /// Логика: кнопка плагина включена → при каждом ВЫБОРЕ инструмента
-    /// «Труба» (появлении контекстной вкладки черчения) плагин ОДИН РАЗ нажимает
-    /// переключатель «Наследование отметок» на ленте. Дальше не трогает —
-    /// до следующего выбора инструмента. Состояние кнопки сохраняется
-    /// между сессиями Revit (settings.ini).
+    /// Логика: пока кнопка плагина включена (ВКЛ) и активен инструмент «Труба»,
+    /// плагин каждые 2 секунды проверяет состояние переключателя
+    /// «Наследование отметок» на ленте и, если он выключен, включает его
+    /// реальным щелчком мыши по экранным координатам кнопки
+    /// (полная эмуляция щелчка человеком).
     ///
     /// Опция не представлена в Revit API, поэтому работаем с лентой напрямую:
-    /// DispatcherTimer на потоке Revit находит кнопку в визуальном WPF-дереве
-    /// ленты и нажимает её через AutomationPeer (полная эмуляция щелчка мышью).
+    /// DispatcherTimer на потоке Revit читает состояние через объектную модель
+    /// Autodesk.Windows (рефлексия), нажатие - через пользовательский ввод.
     ///
     /// Попытки пишутся в лог inherit-log.txt.
     /// </summary>
@@ -31,7 +31,7 @@ namespace SheetViewsMap
         private const string RuName2 = "наследованиеотметок";
         private const string EnName = "inheritelevation";
 
-        private static readonly TimeSpan SearchInterval = TimeSpan.FromMilliseconds(500);
+        private static readonly TimeSpan SearchInterval = TimeSpan.FromSeconds(2);
         private static readonly TimeSpan ClickCooldown = TimeSpan.FromSeconds(2);
         private static readonly TimeSpan ThrottledLogInterval = TimeSpan.FromSeconds(30);
         private static readonly string LogPath = Path.Combine(
@@ -64,15 +64,6 @@ namespace SheetViewsMap
         private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
         private const uint MOUSEEVENTF_LEFTUP = 0x0004;
 
-        /// <summary>Активен ли инструмент черчения труб (в прошлый тик).</summary>
-        private static bool _pipeToolWasActive;
-
-        /// <summary>Сколько попыток нажатия осталось для текущего выбора инструмента.</summary>
-        private static int _clickAttemptsLeft;
-
-        /// <summary>Раньше этого момента клик не выполняется (Revit инициализирует команду).</summary>
-        private static DateTime _clickDelayUntilUtc = DateTime.MinValue;
-
         /// <summary>Включает или выключает автоматическое сопровождение опции.</summary>
         internal static void SetEnabled(bool enabled)
         {
@@ -81,7 +72,7 @@ namespace SheetViewsMap
                 if (_timer != null)
                     return;
 
-                Log("keeper v7 enabled");
+                Log("keeper v8 enabled");
                 _timer = new DispatcherTimer(DispatcherPriority.Background)
                 {
                     Interval = SearchInterval
@@ -103,46 +94,42 @@ namespace SheetViewsMap
 
         private static void OnTick(object sender, EventArgs e)
         {
-            DateTime nowUtc = DateTime.UtcNow;
-            if (nowUtc - _lastClickUtc < ClickCooldown)
-                return;
-
             try
             {
-                // Корень визуального дерева ленты - WPF-элемент; обход
-                // выполняется на потоке Revit и ничего не блокирует.
                 if (!(GetRibbon() is System.Windows.DependencyObject ribbon))
                 {
                     LogThrottled("лента недоступна");
                     return;
                 }
 
-                // Момент выбора инструмента «Труба»: переход «не активна → активна».
                 bool pipeToolActive = IsPipeToolActive(ribbon);
-                bool justActivated = pipeToolActive && !_pipeToolWasActive;
-                _pipeToolWasActive = pipeToolActive;
-
-                if (justActivated)
-                {
-                    // Новое включение инструмента «Труба»: даём Revit 2,5 секунды
-                    // на инициализацию команды размещения, затем нажимаем.
-                    _clickAttemptsLeft = 5;
-                    _clickDelayUntilUtc = nowUtc.AddMilliseconds(2500);
-                }
-
                 if (!pipeToolActive)
                 {
                     LogThrottled("инструмент трубопровода не активен");
                     return;
                 }
 
-                // Инструмент активен: если переключатель выключен - нажимаем.
-                // (Держим опцию включённой всё время черчения; после успешного
-                // нажатия кулдаун 2 секунды, дальше состояние читается заново.)
-                TryClickInheritElevationToggle(ribbon);
+                // Состояние переключателя «Наследование отметок» в модели ленты.
+                bool? toggleState = FindInheritElevationToggleState(ribbon);
 
-                // Диагностика: дамп содержимого вкладки черчения (раз в 30 секунд).
-                DumpPipeTabDiagnostics(ribbon, nowUtc);
+                if (toggleState == null)
+                {
+                    LogThrottled("переключатель не найден в модели ленты (инструмент трубопровода не активен)");
+                    return;
+                }
+
+                if (toggleState == false)
+                {
+                    // Выключена: выполняем РЕАЛЬНЫЙ щелчок мышью по кнопке.
+                    bool clicked = TryClickInheritElevationToggle(ribbon);
+                    LogThrottled(clicked
+                        ? "выполнен щелчок по кнопке «Наследование отметок»"
+                        : "переключатель не найден в визуальном дереве");
+                }
+                else
+                {
+                    LogThrottled("опция «Наследование отметок» включена ✓");
+                }
             }
             catch (Exception ex)
             {
@@ -150,18 +137,85 @@ namespace SheetViewsMap
             }
         }
 
+        // ------------------------------------------------------------------ состояние переключателя
+
+        /// <summary>Состояние переключателя «Наследование отметок» в модели ленты.
+        /// true - включён, false - выключен, null - не найден.</summary>
+        private static bool? FindInheritElevationToggleState(object ribbon)
+        {
+            object tabs = GetProperty(ribbon, "Tabs");
+            if (tabs != null)
+                foreach (object tab in Each(tabs))
+                {
+                    var result = ScanTabForToggleState(tab, 0, new HashSet<object>());
+                    if (result.HasValue)
+                        return result;
+                }
+
+            object contextual = GetProperty(ribbon, "ContextualTabs");
+            if (contextual != null)
+                foreach (object tab in Each(contextual))
+                {
+                    var result = ScanTabForToggleState(tab, 0, new HashSet<object>());
+                    if (result.HasValue)
+                        return result;
+                }
+
+            return null;
+        }
+
+        /// <summary>Ищет переключатель «Наследование отметок» внутри вкладки
+        /// (рекурсивно, включая fold-панели).</summary>
+        private static bool? ScanTabForToggleState(object tab, int depth, HashSet<object> visited)
+        {
+            if (tab == null || depth > 6 || visited.Contains(tab))
+                return null;
+            visited.Add(tab);
+
+            object panels = GetProperty(tab, "Panels");
+            if (panels != null)
+                foreach (object panel in Each(panels))
+                {
+                    object source = GetProperty(panel, "Source");
+                    object items = source == null ? null : GetProperty(source, "Items");
+                    if (items == null)
+                        continue;
+
+                    foreach (object item in Each(items))
+                    {
+                        string text = GetString(item, "Title") ?? GetString(item, "Text") ?? string.Empty;
+                        if (text.IndexOf("наследован", StringComparison.OrdinalIgnoreCase) >= 0
+                            && text.IndexOf("отмет", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            object isChecked = GetProperty(item, "IsChecked");
+                            return isChecked is bool b ? b : (bool?)null;
+                        }
+
+                        // Контейнеры (fold panel и т.п.) обходим рекурсивно.
+                        object inner = GetProperty(item, "Items");
+                        if (inner != null)
+                        {
+                            var result = ScanTabForToggleState(inner, depth + 1, visited);
+                            if (result.HasValue)
+                                return result;
+                        }
+                    }
+                }
+
+            return null;
+        }
+
         // ------------------------------------------------------------------ нажатие
 
         /// <summary>
-        /// Ищет в визуальном дереве ленты переключатель «Наследование отметок».
-        /// true - переключатель найден (нажат, если был выключен);
+        /// Ищет в визуальном дереве ленты ВИДИМЫЙ переключатель «Наследование отметок».
+        /// true - переключатель найден (выполнен щелчок, если был выключен);
         /// false - не найден (визуальное дерево ещё не построено или режим не тот).
         /// </summary>
-        private static bool TryClickInheritElevationToggle(System.Windows.DependencyObject ribbon)
+        private static bool TryClickInheritElevationToggle(object ribbon)
         {
             var stack = new Stack<System.Windows.DependencyObject>();
             var visited = new HashSet<System.Windows.DependencyObject>();
-            int toggleButtonsSeen = 0;
 
             stack.Push(ribbon);
 
@@ -181,8 +235,6 @@ namespace SheetViewsMap
                     // нажатие невидимой копии отжимает видимую.
                     if (!toggleButton.IsVisible)
                         continue;
-
-                    toggleButtonsSeen++;
 
                     string normalized = CollectVisualText(toggleButton);
                     if (MatchesTargetPhrase(normalized))
@@ -208,12 +260,7 @@ namespace SheetViewsMap
                                 mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, System.IntPtr.Zero);
                                 mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, System.IntPtr.Zero);
 
-                                // 4. Небольшое движение мыши над кнопкой: Revit
-                                //    применяет изменение опции при наведении.
-                                SetCursorPos(targetX + 2, targetY);
-                                SetCursorPos(targetX - 2, targetY);
-
-                                // 5. Курсор возвращаем на прежнее место.
+                                // 4. Курсор возвращаем на прежнее место.
                                 SetCursorPos(before.X, before.Y);
                             }), DispatcherPriority.Send);
 
@@ -363,101 +410,6 @@ namespace SheetViewsMap
                 return enumerable;
 
             return new object[0];
-        }
-
-        // ------------------------------------------------------------------ диагностика
-
-        /// <summary>Раз в 30 секунд пишет компактный дамп контекстной вкладки
-        /// черчения труб (если инструмент активен и переключатель ещё не нажат).</summary>
-        private static void DumpPipeTabDiagnostics(object ribbon, DateTime nowUtc)
-        {
-            object tabs = GetProperty(ribbon, "Tabs");
-            object contextual = GetProperty(ribbon, "ContextualTabs");
-
-            var tabObjects = new List<object>();
-
-            if (tabs != null)
-                foreach (object tab in Each(tabs))
-                    tabObjects.Add(tab);
-
-            if (contextual != null)
-                foreach (object tab in Each(contextual))
-                    tabObjects.Add(tab);
-
-            foreach (object tab in tabObjects)
-            {
-                string title = GetString(tab, "Title") ?? string.Empty;
-                if (title.IndexOf("Труба", StringComparison.OrdinalIgnoreCase) < 0)
-                    continue;
-
-                if (nowUtc - _lastDumpLogUtc < TimeSpan.FromSeconds(30))
-                    continue;
-
-                _lastDumpLogUtc = nowUtc;
-                Log("=== ДАМП вкладки \"" + title + "\" ===");
-                Log(DumpTabCompact(tab));
-                Log("=== конец дампа ===");
-            }
-        }
-
-        /// <summary>Компактный дамп вкладки: каждая панель и каждый элемент — одной строкой.</summary>
-        private static string DumpTabCompact(object tab)
-        {
-            var sb = new StringBuilder();
-            string tabTitle = GetString(tab, "Title") ?? "?";
-            sb.AppendLine("Вкладка \"" + tabTitle + "\":");
-
-            object panels = GetProperty(tab, "Panels");
-            if (panels == null)
-            {
-                sb.AppendLine("  (свойство Panels не найдено)");
-                return sb.ToString();
-            }
-
-            foreach (object panel in Each(panels))
-            {
-                object source = GetProperty(panel, "Source");
-                string panelTitle = source == null ? "?" : GetString(source, "Title") ?? "?";
-                sb.AppendLine("  Панель \"" + panelTitle + "\":");
-
-                object items = source == null ? null : GetProperty(source, "Items");
-                if (items == null)
-                {
-                    sb.AppendLine("    (свойство Items не найдено)");
-                    continue;
-                }
-
-                int index = 0;
-                foreach (object entry in Each(items))
-                {
-                    sb.AppendLine("    " + DescribeCompact(entry));
-
-                    if (++index >= 30)
-                    {
-                        sb.AppendLine("    …(дальше обрезано)");
-                        break;
-                    }
-                }
-            }
-
-            return sb.ToString();
-        }
-
-        /// <summary>Краткое описание элемента ленты: тип, подписи, состояние.</summary>
-        private static string DescribeCompact(object entry)
-        {
-            string type = entry.GetType().Name;
-            string title = GetString(entry, "Title");
-            string text = GetString(entry, "Text");
-            string automationName = GetString(entry, "AutomationName");
-            object isChecked = GetProperty(entry, "IsChecked");
-            string state = isChecked is bool b ? ((bool)b ? "ВКЛ" : "выкл") : "-";
-
-            return type
-                + " | Title=\"" + (title ?? "-") + "\""
-                + " | Text=\"" + (text ?? "-") + "\""
-                + " | AutomationName=\"" + (automationName ?? "-") + "\""
-                + " | IsChecked=" + state;
         }
 
         // ------------------------------------------------------------------ фраза и лог
