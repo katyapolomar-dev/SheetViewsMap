@@ -70,6 +70,9 @@ namespace SheetViewsMap
         /// <summary>Сколько попыток нажатия осталось для текущего выбора инструмента.</summary>
         private static int _clickAttemptsLeft;
 
+        /// <summary>Раньше этого момента клик не выполняется (Revit инициализирует команду).</summary>
+        private static DateTime _clickDelayUntilUtc = DateTime.MinValue;
+
         /// <summary>Включает или выключает автоматическое сопровождение опции.</summary>
         internal static void SetEnabled(bool enabled)
         {
@@ -136,7 +139,7 @@ namespace SheetViewsMap
                 // Инструмент активен: если переключатель выключен - нажимаем.
                 // (Держим опцию включённой всё время черчения; после успешного
                 // нажатия кулдаун 2 секунды, дальше состояние читается заново.)
-                TryClickInheritElevationToggle(ribbon, nowUtc);
+                TryClickInheritElevationToggle(ribbon);
 
                 // Диагностика: дамп содержимого вкладки черчения (раз в 30 секунд).
                 DumpPipeTabDiagnostics(ribbon, nowUtc);
