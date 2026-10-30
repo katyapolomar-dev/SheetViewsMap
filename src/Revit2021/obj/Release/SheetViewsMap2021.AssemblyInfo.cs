@@ -12,11 +12,11 @@ using System.Reflection;
 
 [assembly: System.Reflection.AssemblyCompanyAttribute("SheetViewsMap")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
-[assembly: System.Reflection.AssemblyFileVersionAttribute("1.2.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.2.0+d1d722c1d553855068f877a54a342ddd43f02a1d")]
+[assembly: System.Reflection.AssemblyFileVersionAttribute("1.2.1.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.2.1+ee27b0b36fe047d619e0b42ae9045ded4cdc3a60")]
 [assembly: System.Reflection.AssemblyProductAttribute("Sheet Views Map")]
 [assembly: System.Reflection.AssemblyTitleAttribute("SheetViewsMap2021")]
-[assembly: System.Reflection.AssemblyVersionAttribute("1.2.0.0")]
+[assembly: System.Reflection.AssemblyVersionAttribute("1.2.1.0")]
 [assembly: System.Resources.NeutralResourcesLanguageAttribute("ru-RU")]
 
 // Создано классом WriteCodeFragment MSBuild.
