@@ -208,7 +208,12 @@ namespace SheetViewsMap
                                 mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, System.IntPtr.Zero);
                                 mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, System.IntPtr.Zero);
 
-                                // 4. Курсор возвращаем на прежнее место.
+                                // 4. Небольшое движение мыши над кнопкой: Revit
+                                //    применяет изменение опции при наведении.
+                                SetCursorPos(targetX + 2, targetY);
+                                SetCursorPos(targetX - 2, targetY);
+
+                                // 5. Курсор возвращаем на прежнее место.
                                 SetCursorPos(before.X, before.Y);
                             }), DispatcherPriority.Send);
 
