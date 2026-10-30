@@ -299,6 +299,28 @@ namespace SheetViewsMap
             }
         }
 
+        private static object GetProperty(object target, string name)
+        {
+            if (target == null)
+                return null;
+
+            try
+            {
+                PropertyInfo property = target.GetType().GetProperty(name);
+                return property == null ? null : property.GetValue(target, null);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static string GetString(object target, string name)
+        {
+            object value = GetProperty(target, name);
+            return value as string;
+        }
+
         /// <summary>Приводит объект к IEnumerable (или возвращает пустой набор).</summary>
         private static IEnumerable Each(object collection)
         {
