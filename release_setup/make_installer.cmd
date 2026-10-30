@@ -18,8 +18,8 @@ set "SETUP_DIR=%~dp0"
 for %%I in ("%SETUP_DIR%..") do set "ROOT=%%~fI"
 set "STAGE=%SETUP_DIR%out"
 set "VERSIONS=2021 2025"
-set "APP_VERSION=1.2.1"
-rem Единый источник версии - Version.txt; здесь меняем при выпуске релиза.
+rem Single source of version - Version.txt in the repo root (AGENTS.md).
+set /p "APP_VERSION=" < "%ROOT%\Version.txt"
 set "OUTPUT_NAME=SheetViewsMap_Setup_v%APP_VERSION%.exe"
 
 echo ============================================================
