@@ -212,7 +212,7 @@ namespace SheetViewsMap
         /// true - переключатель найден (выполнен щелчок, если был выключен);
         /// false - не найден (визуальное дерево ещё не построено или режим не тот).
         /// </summary>
-        private static bool TryClickInheritElevationToggle(object ribbon)
+        private static bool TryClickInheritElevationToggle(System.Windows.DependencyObject ribbon)
         {
             var stack = new Stack<System.Windows.DependencyObject>();
             var visited = new HashSet<System.Windows.DependencyObject>();
