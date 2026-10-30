@@ -13,15 +13,18 @@ namespace SheetViewsMap
     /// <summary>
     /// Держит опцию «Наследование отметок» включённой при черчении трубопроводов.
     ///
-    /// Логика: кнопка плагина включена → при каждом ВЫБОРЕ инструмента
-    /// «Труба» (появлении контекстной вкладки черчения) плагин ОДИН РАЗ нажимает
-    /// переключатель «Наследование отметок» на ленте. Дальше не трогает —
-    /// до следующего выбора инструмента. Состояние кнопки сохраняется
-    /// между сессиями Revit (settings.ini).
+    /// Логика: кнопка плагина включена → пока активен инструмент «Труба»,
+    /// плагин следит за переключателем «Наследование отметок»: как только
+    /// он оказывается выключен (при выборе инструмента или после ESC,
+    /// когда Revit сбрасывает опцию), выполняется ОДИН «человеческий»
+    /// щелчок, снова включающий опцию. Пока опция включена - не трогает.
+    /// Состояние кнопки сохраняется между сессиями Revit (settings.ini).
     ///
     /// Опция не представлена в Revit API, поэтому работаем с лентой напрямую:
     /// DispatcherTimer на потоке Revit находит кнопку в визуальном WPF-дереве
-    /// ленты и нажимает её через AutomationPeer (полная эмуляция щелчка мышью).
+    /// ленты и выполняет «человеческий» щелчок мышью по её координатам
+    /// (наведение - зажатие - отпускание, с паузами, на фоновом потоке -
+    /// Revit успевает обработать каждое событие мыши как настоящее).
     ///
     /// Попытки пишутся в лог inherit-log.txt.
     /// </summary>
@@ -67,8 +70,8 @@ namespace SheetViewsMap
         /// <summary>Активен ли инструмент черчения труб (в прошлый тик).</summary>
         private static bool _pipeToolWasActive;
 
-        /// <summary>Сколько попыток нажатия осталось для текущего выбора инструмента.</summary>
-        private static int _clickAttemptsLeft;
+        /// <summary>Успех уже отмечен в логе для текущего выбора инструмента.</summary>
+        private static bool _successLoggedThisActivation;
 
         /// <summary>Раньше этого момента клик не выполняется (Revit инициализирует команду).</summary>
         private static DateTime _clickDelayUntilUtc = DateTime.MinValue;
@@ -81,7 +84,7 @@ namespace SheetViewsMap
                 if (_timer != null)
                     return;
 
-                Log("keeper v7 enabled");
+                Log("keeper v7.2 enabled");
                 _timer = new DispatcherTimer(DispatcherPriority.Background)
                 {
                     Interval = SearchInterval
@@ -104,8 +107,6 @@ namespace SheetViewsMap
         private static void OnTick(object sender, EventArgs e)
         {
             DateTime nowUtc = DateTime.UtcNow;
-            if (nowUtc - _lastClickUtc < ClickCooldown)
-                return;
 
             try
             {
@@ -124,10 +125,11 @@ namespace SheetViewsMap
 
                 if (justActivated)
                 {
-                    // Новое включение инструмента «Труба»: даём Revit 2,5 секунды
-                    // на инициализацию команды размещения, затем нажимаем.
-                    _clickAttemptsLeft = 5;
-                    _clickDelayUntilUtc = nowUtc.AddMilliseconds(2500);
+                    // Новое включение инструмента «Труба»: даём Revit 1 секунду
+                    // на построение вкладки черчения, затем нажимаем.
+                    _successLoggedThisActivation = false;
+                    _clickDelayUntilUtc = nowUtc.AddMilliseconds(1000);
+                    Log("инструмент «Труба» выбран: нажму «Наследование отметок» через ~1 с");
                 }
 
                 if (!pipeToolActive)
@@ -136,13 +138,36 @@ namespace SheetViewsMap
                     return;
                 }
 
-                // Инструмент активен: если переключатель выключен - нажимаем.
-                // (Держим опцию включённой всё время черчения; после успешного
-                // нажатия кулдаун 2 секунды, дальше состояние читается заново.)
-                TryClickInheritElevationToggle(ribbon);
+                // Рано: Revit ещё инициализирует команду и строит вкладку.
+                if (nowUtc < _clickDelayUntilUtc)
+                    return;
 
-                // Диагностика: дамп содержимого вкладки черчения (раз в 30 секунд).
-                DumpPipeTabDiagnostics(ribbon, nowUtc);
+                // Пауза между щелчками.
+                if (nowUtc - _lastClickUtc < ClickCooldown)
+                    return;
+
+                // Состояние решает всё: кнопка найдена и выключена (Revit сбросил
+                // опцию - при выборе инструмента или после ESC) - нажимаем;
+                // включена - не трогаем. Так работает и первое включение,
+                // и повторное после ESC, даже если вкладка не исчезала.
+                bool found;
+                bool clicked;
+                TryClickInheritElevationToggle(ribbon, out found, out clicked);
+
+                if (clicked)
+                {
+                    _lastClickUtc = nowUtc;
+                    Log("кнопка была выключена - щелчок отправлен");
+                }
+                else if (found && !_successLoggedThisActivation)
+                {
+                    _successLoggedThisActivation = true;
+                    Log("опция «Наследование отметок» включена ✓");
+                }
+                else if (!found)
+                {
+                    LogThrottled("кнопка ещё не появилась в визуальном дереве");
+                }
             }
             catch (Exception ex)
             {
@@ -154,14 +179,16 @@ namespace SheetViewsMap
 
         /// <summary>
         /// Ищет в визуальном дереве ленты переключатель «Наследование отметок».
-        /// true - переключатель найден (нажат, если был выключен);
-        /// false - не найден (визуальное дерево ещё не построено или режим не тот).
+        /// found - переключатель найден; clicked - отправлен щелчок (был выключен).
         /// </summary>
-        private static bool TryClickInheritElevationToggle(System.Windows.DependencyObject ribbon)
+        private static void TryClickInheritElevationToggle(
+            System.Windows.DependencyObject ribbon, out bool found, out bool clicked)
         {
+            found = false;
+            clicked = false;
+
             var stack = new Stack<System.Windows.DependencyObject>();
             var visited = new HashSet<System.Windows.DependencyObject>();
-            int toggleButtonsSeen = 0;
 
             stack.Push(ribbon);
 
@@ -182,46 +209,37 @@ namespace SheetViewsMap
                     if (!toggleButton.IsVisible)
                         continue;
 
-                    toggleButtonsSeen++;
-
                     string normalized = CollectVisualText(toggleButton);
                     if (MatchesTargetPhrase(normalized))
                     {
+                        found = true;
+
                         // Нашли настоящую кнопку «Наследование отметок»:
-                        // если выключена - выполняем РЕАЛЬНЫЙ щелчок мышью
-                        // по её экранным координатам (курсор возвращается на место).
+                        // если выключена - выполняем «человеческий» щелчок мышью.
                         if (toggleButton.IsChecked != true)
                         {
-                            toggleButton.Dispatcher.Invoke(new Action(() =>
+                            if (toggleButton.ActualWidth >= 4 && toggleButton.ActualHeight >= 4)
                             {
-                                // 1. Экранные координаты центра кнопки.
+                                // Координаты берём на потоке Revit (PointToScreen
+                                // требует поток элемента), саму последовательность
+                                // мыши выполняем на фоновом потоке с паузами.
                                 var center = toggleButton.PointToScreen(
                                     new System.Windows.Point(toggleButton.ActualWidth / 2, toggleButton.ActualHeight / 2));
-                                int targetX = (int)Math.Round(center.X);
-                                int targetY = (int)Math.Round(center.Y);
-
-                                // 2. Запоминаем позицию курсора.
                                 GetCursorPos(out POINT before);
 
-                                // 3. Перемещаем курсор на кнопку и щёлкаем.
-                                SetCursorPos(targetX, targetY);
-                                mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, System.IntPtr.Zero);
-                                mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, System.IntPtr.Zero);
+                                PerformHumanClick(
+                                    (int)Math.Round(center.X), (int)Math.Round(center.Y),
+                                    before.X, before.Y);
 
-                                // 4. Небольшое движение мыши над кнопкой: Revit
-                                //    применяет изменение опции при наведении.
-                                SetCursorPos(targetX + 2, targetY);
-                                SetCursorPos(targetX - 2, targetY);
-
-                                // 5. Курсор возвращаем на прежнее место.
-                                SetCursorPos(before.X, before.Y);
-                            }), DispatcherPriority.Send);
-
-                            _lastClickUtc = DateTime.UtcNow;
-                            Log("выполнен реальный щелчок по кнопке «Наследование отметок»");
+                                clicked = true;
+                            }
+                            else
+                            {
+                                Log("кнопка найдена, но ещё не отрисована - щелчок перенесён");
+                            }
                         }
 
-                        return true;
+                        return;
                     }
                 }
 
@@ -229,8 +247,45 @@ namespace SheetViewsMap
                 for (int i = 0; i < childrenCount; i++)
                     stack.Push(System.Windows.Media.VisualTreeHelper.GetChild(current, i));
             }
+        }
 
-            return false;
+        /// <summary>
+        /// «Человеческий» щелчок на фоновом потоке: наведение с паузой, зажатие,
+        /// отпускание, лёгкое движение для применения опции, возврат курсора.
+        /// Паузы дают Revit время обработать каждое событие мыши по-настоящему
+        /// (сейчас щелчок воспринимается как реальный клик человека);
+        /// поток Revit при этом не блокируется.
+        /// </summary>
+        private static void PerformHumanClick(int targetX, int targetY, int beforeX, int beforeY)
+        {
+            System.Threading.ThreadPool.QueueUserWorkItem(delegate
+            {
+                try
+                {
+                    // 1. Навели курсор на кнопку.
+                    SetCursorPos(targetX, targetY);
+                    System.Threading.Thread.Sleep(100); // пауза наведения - WPF обрабатывает MouseMove
+
+                    // 2. Зажали и держим, как человек.
+                    mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, System.IntPtr.Zero);
+                    System.Threading.Thread.Sleep(60);
+
+                    // 3. Отпустили и даём применить нажатие.
+                    mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, System.IntPtr.Zero);
+                    System.Threading.Thread.Sleep(60);
+
+                    // 4. Лёгкое движение мыши над кнопкой: Revit
+                    //    применяет изменение опции при наведении.
+                    SetCursorPos(targetX + 2, targetY);
+                    SetCursorPos(targetX - 2, targetY);
+
+                    // 5. Курсор возвращаем на прежнее место.
+                    SetCursorPos(beforeX, beforeY);
+                }
+                catch
+                {
+                }
+            });
         }
 
         /// <summary>Собирает весь текст кнопки из визуального дерева (TextBlock'и) и Content.</summary>
