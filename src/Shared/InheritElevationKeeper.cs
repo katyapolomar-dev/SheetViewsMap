@@ -162,6 +162,11 @@ namespace SheetViewsMap
                 // Интересуют WPF-переключатели.
                 if (current is System.Windows.Controls.Primitives.ToggleButton toggleButton)
                 {
+                    // Скрытые копии кнопки (свёрнутая панель ленты) пропускаем -
+                    // нажатие невидимой копии отжимает видимую.
+                    if (!toggleButton.IsVisible)
+                        continue;
+
                     toggleButtonsSeen++;
 
                     string normalized = CollectVisualText(toggleButton);
