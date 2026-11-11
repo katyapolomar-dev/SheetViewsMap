@@ -1,14 +1,14 @@
 @echo off
 rem =============================================================
-rem   PallMall - one-click installer build.
+rem   SheetViewsMap - one-click installer build.
 rem
 rem   Run: double-click this file.
 rem   Steps:
 rem     1. Rebuilds plugin DLLs for every installed Revit version.
 rem     2. Stages DLLs into release_setup\out\<year>\.
-rem     3. Compiles PallMall_Setup_v<version>.exe via Inno Setup.
+rem     3. Compiles SheetViewsMap_Setup_v<version>.exe via Inno Setup.
 rem
-rem   Result: release_setup\PallMall_Setup_v<version>.exe
+rem   Result: release_setup\SheetViewsMap_Setup_v<version>.exe
 rem   NOTE: keep this file ASCII-only. Cyrillic text in a .cmd
 rem   with "chcp 65001" corrupts cmd.exe parsing.
 rem =============================================================
@@ -20,10 +20,10 @@ set "STAGE=%SETUP_DIR%out"
 set "VERSIONS=2021 2025"
 rem Single source of version - Version.txt in the repo root (AGENTS.md).
 set /p "APP_VERSION=" < "%ROOT%\Version.txt"
-set "OUTPUT_NAME=PallMall_Setup_v%APP_VERSION%.exe"
+set "OUTPUT_NAME=SheetViewsMap_Setup_v%APP_VERSION%.exe"
 
 echo ============================================================
-echo   PallMall - building installer
+echo   SheetViewsMap - building installer
 echo ============================================================
 echo.
 
@@ -42,8 +42,8 @@ echo Compiler: !ISCC!
 echo.
 
 rem --- 1a. Build the external updater (no Revit API needed) ---
-echo --- Building updater (PallMall.Updater.exe) ---
-dotnet build "%ROOT%\src\PallMall.Updater\PallMall.Updater.csproj" -c Release
+echo --- Building updater (SheetViewsMap.Updater.exe) ---
+dotnet build "%ROOT%\src\SheetViewsMap.Updater\SheetViewsMap.Updater.csproj" -c Release
 if errorlevel 1 (
     echo [ERROR] Updater build failed. See messages above.
     exit /b 1
@@ -57,14 +57,14 @@ rem DLL 2025 остаётся со старой версией, как это с
 for %%V in (%VERSIONS%) do (
     if exist "%ProgramFiles%\Autodesk\Revit %%V\RevitAPI.dll" (
         echo --- Building plugin for Revit %%V ---
-        dotnet build "%ROOT%\src\Revit%%V\PallMall%%V.csproj" -c Release -p:RevitVersion=%%V
+        dotnet build "%ROOT%\src\Revit%%V\SheetViewsMap%%V.csproj" -c Release -p:RevitVersion=%%V
         if errorlevel 1 (
             echo [%%V] BUILD FAILED. See messages above.
             exit /b 1
         )
     ) else if "%%V"=="2025" (
         echo --- Revit %%V not installed, building via NuGet fallback ---
-        dotnet build "%ROOT%\src\Revit%%V\PallMall%%V.csproj" -c Release -p:RevitVersion=%%V
+        dotnet build "%ROOT%\src\Revit%%V\SheetViewsMap%%V.csproj" -c Release -p:RevitVersion=%%V
         if errorlevel 1 (
             echo [%%V] BUILD FAILED. See messages above.
             exit /b 1
@@ -79,7 +79,7 @@ rem Clear previous staging: leftover DLLs from the old name would otherwise
 rem be packed into the update zips and end up on users' machines.
 if exist "%STAGE%" rmdir /s /q "%STAGE%"
 for %%V in (%VERSIONS%) do (
-    if exist "%ROOT%\out\%%V\PallMall%%V.dll" (
+    if exist "%ROOT%\out\%%V\SheetViewsMap%%V.dll" (
         if not exist "%STAGE%\%%V" mkdir "%STAGE%\%%V"
         copy /Y "%ROOT%\out\%%V\*.dll" "%STAGE%\%%V\" >nul
         if errorlevel 1 (
@@ -88,7 +88,7 @@ for %%V in (%VERSIONS%) do (
         )
     ) else (
         echo [ERROR] Missing built DLL for Revit %%V:
-        echo         "%ROOT%\out\%%V\PallMall%%V.dll"
+        echo         "%ROOT%\out\%%V\SheetViewsMap%%V.dll"
         echo         Install Revit %%V or put the DLL there manually.
         exit /b 1
     )
@@ -96,9 +96,9 @@ for %%V in (%VERSIONS%) do (
 
 rem --- 3a. Stage the updater ---
 if not exist "%STAGE%\Updater" mkdir "%STAGE%\Updater"
-copy /Y "%ROOT%\out\Updater\PallMall.Updater.exe" "%STAGE%\Updater\" >nul
+copy /Y "%ROOT%\out\Updater\SheetViewsMap.Updater.exe" "%STAGE%\Updater\" >nul
 if errorlevel 1 (
-    echo [ERROR] Failed to copy PallMall.Updater.exe.
+    echo [ERROR] Failed to copy SheetViewsMap.Updater.exe.
     exit /b 1
 )
 
@@ -106,12 +106,12 @@ rem --- 3b. Pack per-year zip assets for the in-app update check ---
 echo.
 echo --- Packing update zips ---
 for %%V in (%VERSIONS%) do (
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "Compress-Archive -Path '%STAGE%\%%V\*' -DestinationPath '%SETUP_DIR%PallMall-%%V.zip' -Force"
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "Compress-Archive -Path '%STAGE%\%%V\*' -DestinationPath '%SETUP_DIR%SheetViewsMap-%%V.zip' -Force"
     if errorlevel 1 (
-        echo [ERROR] Failed to pack PallMall-%%V.zip
+        echo [ERROR] Failed to pack SheetViewsMap-%%V.zip
         exit /b 1
     )
-    echo PallMall-%%V.zip - OK
+    echo SheetViewsMap-%%V.zip - OK
 )
 
 rem --- 4. Версия для установщика (version.iss читается .iss-скриптом) ---
@@ -120,7 +120,7 @@ rem --- 4. Версия для установщика (version.iss читает�
 rem --- 5. Compile the installer ---
 echo.
 echo --- Compiling installer ---
-"!ISCC!" "%SETUP_DIR%PallMall.iss"
+"!ISCC!" "%SETUP_DIR%SheetViewsMap.iss"
 if errorlevel 1 (
     echo [ERROR] Inno Setup compilation failed. See messages above.
     exit /b 1

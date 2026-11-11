@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 
-namespace PallMall
+namespace SheetViewsMap
 {
     /// <summary>
     /// Читает из документа листы и размещённые на них виды.

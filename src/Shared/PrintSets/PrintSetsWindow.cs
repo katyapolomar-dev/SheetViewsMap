@@ -9,7 +9,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 
-namespace PallMall
+namespace SheetViewsMap
 {
     /// <summary>
     /// Окно наборов печати.
@@ -52,7 +52,7 @@ namespace PallMall
 
         private PrintSetsWindow()
         {
-            Title = "Наборы печати — PallMall";
+            Title = "Наборы печати — SheetViewsMap";
             Width = 720;
             Height = 620;
             MinWidth = 560;

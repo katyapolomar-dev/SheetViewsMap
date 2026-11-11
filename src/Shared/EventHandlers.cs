@@ -2,7 +2,7 @@ using System;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 
-namespace PallMall
+namespace SheetViewsMap
 {
     /// <summary>
     /// Перечитывает листы и раскладку видов. Запускается Revit'ом по кнопке «Обновить».
@@ -28,7 +28,7 @@ namespace PallMall
 
         public string GetName()
         {
-            return "PallMall — чтение листов и видов";
+            return "SheetViewsMap — чтение листов и видов";
         }
     }
 
@@ -90,7 +90,7 @@ namespace PallMall
 
         public string GetName()
         {
-            return "PallMall — открытие листа или вида";
+            return "SheetViewsMap — открытие листа или вида";
         }
     }
 }

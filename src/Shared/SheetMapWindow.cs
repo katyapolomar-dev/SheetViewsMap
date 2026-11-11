@@ -6,7 +6,7 @@ using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Threading;
 
-namespace PallMall
+namespace SheetViewsMap
 {
     /// <summary>
     /// Отдельное окно плагина поверх окон Revit.
@@ -135,7 +135,7 @@ namespace PallMall
             {
                 return Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "PallMall",
+                    "SheetViewsMap",
                     "window.ini");
             }
         }

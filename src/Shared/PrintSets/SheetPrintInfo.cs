@@ -1,6 +1,6 @@
 using Autodesk.Revit.DB;
 
-namespace PallMall
+namespace SheetViewsMap
 {
     /// <summary>
     /// Данные листа, нужные для наборов печати: комплект и формат.

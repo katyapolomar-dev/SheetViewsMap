@@ -1,6 +1,6 @@
 using System;
 
-namespace PallMall
+namespace SheetViewsMap
 {
     /// <summary>
     /// Сравнение версий вида «X.Y.Z».

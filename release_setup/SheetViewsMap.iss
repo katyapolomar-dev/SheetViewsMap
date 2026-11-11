@@ -1,15 +1,15 @@
 ﻿; ============================================================
-;  PallMall — установщик плагина для Autodesk Revit
-;  Сборка: make_installer.cmd  (или вручную: ISCC PallMall.iss)
+;  Sheet Views Map — установщик плагина для Autodesk Revit
+;  Сборка: make_installer.cmd  (или вручную: ISCC SheetViewsMap.iss)
 ;  Поддерживаемые версии Revit: 2021, 2025
 ;
 ;  Что делает установщик:
-;    1. Кладёт DLL плагина в %LOCALAPPDATA%\PallMall\<год>\
+;    1. Кладёт DLL плагина в %LOCALAPPDATA%\SheetViewsMap\<год>\
 ;    2. Для каждой УСТАНОВЛЕННОЙ версии Revit создаёт .addin-манифест
 ;       в %APPDATA%\Autodesk\Revit\Addins\<год>\
 ;    3. Деинсталлятор удаляет и DLL, и .addin-манифесты.
-;    4. Убирает установку прежнего имени (Sheet Views Map) и переносит
-;       настройки пользователя — иначе Revit загрузил бы два плагина.
+;    4. Убирает остатки короткого имени PallMall и переносит настройки
+;       пользователя — иначе Revit загрузил бы два плагина.
 ;
 ;  Права администратора не нужны (всё пишется в профиль пользователя).
 ;  Файл должен быть сохранён в UTF-8 с BOM (кириллица в [Messages]).
@@ -20,22 +20,21 @@
 #include "version.iss"
 
 [Setup]
-AppName=PallMall
-; Постоянный идентификатор приложения. Без него Inno выводит AppId из AppName,
-; и после переименования старую установку пришлось бы чистить вручную.
-AppId={{8C3F2A64-7B1D-4E59-9A0C-5D2B6F81E4A7}
+AppName=Sheet Views Map
+; AppId намеренно не задаём: Inno выводит его из AppName, и он совпадает
+; с ключом прежних установок («Sheet Views Map_is1») — обновление проходит поверх.
 ; Версия приходит из release_setup\version.iss, который генерирует make_installer.cmd
 ; из Version.txt (единственный источник версии).
 AppVersion={#MyAppVersion}
 AppPublisher=katyapolomar-dev
-AppPublisherURL=https://github.com/katyapolomar-dev/PallMall
-AppSupportURL=https://github.com/katyapolomar-dev/PallMall
-AppUpdatesURL=https://github.com/katyapolomar-dev/PallMall/releases
+AppPublisherURL=https://github.com/katyapolomar-dev/SheetViewsMap
+AppSupportURL=https://github.com/katyapolomar-dev/SheetViewsMap
+AppUpdatesURL=https://github.com/katyapolomar-dev/SheetViewsMap/releases
 VersionInfoVersion={#MyAppVersion}
 VersionInfoProductVersion={#MyAppVersion}
 
-; Всегда ставим в %LOCALAPPDATA%\PallMall (не спрашиваем путь).
-DefaultDirName={localappdata}\PallMall
+; Всегда ставим в %LOCALAPPDATA%\SheetViewsMap (не спрашиваем путь).
+DefaultDirName={localappdata}\SheetViewsMap
 ; Не используем путь прошлой установки: старые версии ставили в ...\Setup.
 UsePreviousAppDir=no
 DisableDirPage=yes
@@ -47,7 +46,7 @@ PrivilegesRequired=lowest
 ArchitecturesInstallIn64BitMode=x64compatible
 
 OutputDir=.
-OutputBaseFilename=PallMall_Setup_v{#MyAppVersion}
+OutputBaseFilename=SheetViewsMap_Setup_v{#MyAppVersion}
 SetupIconFile=setup_icon.ico
 Compression=lzma2/max
 SolidCompression=yes
@@ -58,34 +57,34 @@ Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 
 [Files]
 ; Относительные пути отсчитываются от папки с этим .iss (release_setup\out\...).
-Source: "out\2021\PallMall2021.dll"; DestDir: "{app}\2021"; Flags: ignoreversion
-Source: "out\2025\PallMall2025.dll"; DestDir: "{app}\2025"; Flags: ignoreversion
+Source: "out\2021\SheetViewsMap2021.dll"; DestDir: "{app}\2021"; Flags: ignoreversion
+Source: "out\2025\SheetViewsMap2025.dll"; DestDir: "{app}\2025"; Flags: ignoreversion
 
 ; Внешний апдейтер: применяет обновление после закрытия Revit.
-Source: "out\Updater\PallMall.Updater.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "out\Updater\SheetViewsMap.Updater.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Чистим хвосты старых вариантов установщика (папка Setup, шаблон .addin).
 [InstallDelete]
-Type: filesandordirs; Name: "{localappdata}\PallMall\Setup"
-Type: filesandordirs; Name: "{localappdata}\PallMall\addins"
-; До переименования плагин назывался Sheet Views Map: удаляем его файлы,
-; иначе Revit загрузит старую и новую версию одновременно (один AddInId).
-Type: filesandordirs; Name: "{localappdata}\SheetViewsMap"
-Type: files; Name: "{userappdata}\Autodesk\Revit\Addins\2021\SheetViewsMap.addin"
-Type: files; Name: "{userappdata}\Autodesk\Revit\Addins\2023\SheetViewsMap.addin"
-Type: files; Name: "{userappdata}\Autodesk\Revit\Addins\2025\SheetViewsMap.addin"
+Type: filesandordirs; Name: "{localappdata}\SheetViewsMap\Setup"
+Type: filesandordirs; Name: "{localappdata}\SheetViewsMap\addins"
+; Короткое имя PallMall: если кто-то успел поставить эту сборку, убираем её
+; файлы и манифесты, иначе Revit загрузит два плагина с одним AddInId.
+Type: filesandordirs; Name: "{localappdata}\PallMall"
+Type: files; Name: "{userappdata}\Autodesk\Revit\Addins\2021\PallMall.addin"
+Type: files; Name: "{userappdata}\Autodesk\Revit\Addins\2023\PallMall.addin"
+Type: files; Name: "{userappdata}\Autodesk\Revit\Addins\2025\PallMall.addin"
 
 ; Деинсталляция убирает .addin-манифесты (файла может не быть — это не ошибка).
 [UninstallDelete]
-Type: files; Name: "{userappdata}\Autodesk\Revit\Addins\2021\PallMall.addin"
-Type: files; Name: "{userappdata}\Autodesk\Revit\Addins\2025\PallMall.addin"
+Type: files; Name: "{userappdata}\Autodesk\Revit\Addins\2021\SheetViewsMap.addin"
+Type: files; Name: "{userappdata}\Autodesk\Revit\Addins\2025\SheetViewsMap.addin"
 
-; Запись деинсталлятора прежнего имени (AppId выводился из «Sheet Views Map»).
+; Запись деинсталлятора короткого имени PallMall (AppId задавался явно).
 [Registry]
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Uninstall\Sheet Views Map_is1"; Flags: dontcreatekey deletekey
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Uninstall\{{8C3F2A64-7B1D-4E59-9A0C-5D2B6F81E4A7}_is1"; Flags: dontcreatekey deletekey
 
 [Messages]
-FinishedLabelNoIcons=Плагин установлен!%n%nЗапустите Revit — на ленте появится вкладка «PallMall» с кнопкой открытия панели.
+FinishedLabelNoIcons=Плагин установлен!%n%nЗапустите Revit — на ленте появится вкладка «Sheet Views Map» с кнопкой открытия панели.
 
 [Code]
 const
@@ -116,13 +115,13 @@ end;
 // поэтому используем {localappdata} — каталог установки фиксированный.
 function PluginDllPath(const Year: String): String;
 begin
-  Result := ExpandConstant('{localappdata}\PallMall\') + Year + '\PallMall' + Year + '.dll';
+  Result := ExpandConstant('{localappdata}\SheetViewsMap\') + Year + '\SheetViewsMap' + Year + '.dll';
 end;
 
-// Путь к DLL прежнего имени плагина (Sheet Views Map) для указанного года.
+// Путь к DLL прежнего короткого имени (PallMall) для указанного года.
 function LegacyPluginDllPath(const Year: String): String;
 begin
-  Result := ExpandConstant('{localappdata}\SheetViewsMap\') + Year + '\SheetViewsMap' + Year + '.dll';
+  Result := ExpandConstant('{localappdata}\PallMall\') + Year + '\PallMall' + Year + '.dll';
 end;
 
 function CreateFileW(lpFileName: String; dwDesiredAccess: Cardinal; dwShareMode: Cardinal; lpSecurityAttributes: Cardinal; dwCreationDisposition: Cardinal; dwFlagsAndAttributes: Cardinal; hTemplateFile: THandle): THandle;
@@ -176,7 +175,7 @@ begin
     CopyFile(Source, Dest, False);
 end;
 
-// Переносит пользовательские настройки прежнего имени в новую папку.
+// Переносит пользовательские настройки из папки короткого имени (PallMall).
 // Вызывается до удаления старой папки из [InstallDelete].
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
@@ -184,8 +183,8 @@ var
   NewDir: String;
 begin
   Result := '';
-  OldDir := ExpandConstant('{localappdata}\SheetViewsMap');
-  NewDir := ExpandConstant('{localappdata}\PallMall');
+  OldDir := ExpandConstant('{localappdata}\PallMall');
+  NewDir := ExpandConstant('{localappdata}\SheetViewsMap');
 
   if not DirExists(OldDir) then
     Exit;
@@ -233,19 +232,19 @@ var
   Content: String;
 begin
   AddinDir := ExpandConstant('{userappdata}\Autodesk\Revit\Addins\') + Year;
-  AddinFile := AddinDir + '\PallMall.addin';
+  AddinFile := AddinDir + '\SheetViewsMap.addin';
 
   // Только ASCII: Revit парсит .addin как UTF-8, кириллица тут вызывала кракозябры.
   Content :=
     '<?xml version="1.0" encoding="utf-8"?>' #13#10 +
     '<RevitAddIns>' #13#10 +
     '  <AddIn Type="Application">' #13#10 +
-    '    <Name>PallMall</Name>' #13#10 +
+    '    <Name>SheetViewsMap</Name>' #13#10 +
     '    <Assembly>' + PluginDllPath(Year) + '</Assembly>' #13#10 +
     '    <AddInId>9f2a7c41-58d6-4b0e-9a73-1c4e8d5f0b26</AddInId>' #13#10 +
-    '    <FullClassName>PallMall.App</FullClassName>' #13#10 +
-    '    <VendorId>PLML</VendorId>' #13#10 +
-    '    <VendorDescription>PallMall</VendorDescription>' #13#10 +
+    '    <FullClassName>SheetViewsMap.App</FullClassName>' #13#10 +
+    '    <VendorId>SVMP</VendorId>' #13#10 +
+    '    <VendorDescription>Sheet Views Map</VendorDescription>' #13#10 +
     '  </AddIn>' #13#10 +
     '</RevitAddIns>';
 

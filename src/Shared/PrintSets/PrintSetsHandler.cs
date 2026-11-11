@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 
-namespace PallMall
+namespace SheetViewsMap
 {
     /// <summary>
     /// Создаёт наборы печати по запросу из окна плагина:
@@ -39,7 +39,7 @@ namespace PallMall
 
         public string GetName()
         {
-            return "PallMall — наборы печати";
+            return "SheetViewsMap — наборы печати";
         }
     }
 }

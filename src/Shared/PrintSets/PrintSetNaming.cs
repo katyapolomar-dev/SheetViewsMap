@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text;
 
-namespace PallMall
+namespace SheetViewsMap
 {
     /// <summary>
     /// Правила имён наборов печати.

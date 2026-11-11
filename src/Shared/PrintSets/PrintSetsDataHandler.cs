@@ -1,7 +1,7 @@
 using System;
 using Autodesk.Revit.UI;
 
-namespace PallMall
+namespace SheetViewsMap
 {
     /// <summary>
     /// Читает данные для окна наборов печати (листы, комплект, формат).
@@ -28,7 +28,7 @@ namespace PallMall
 
         public string GetName()
         {
-            return "PallMall — чтение листов для наборов печати";
+            return "SheetViewsMap — чтение листов для наборов печати";
         }
     }
 }

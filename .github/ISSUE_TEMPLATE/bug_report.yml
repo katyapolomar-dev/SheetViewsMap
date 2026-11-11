@@ -17,7 +17,7 @@ body:
     id: plugin-version
     attributes:
       label: Версия плагина
-      description: Например, из имени установщика — PallMall_Setup_v1.2.1.exe
+      description: Например, из имени установщика — SheetViewsMap_Setup_v1.2.1.exe
     validations:
       required: true
   - type: textarea
@@ -48,4 +48,4 @@ body:
     attributes:
       label: Дополнительно
       options:
-        - label: Могу приложить лог из %LOCALAPPDATA%\PallMall (если есть)
+        - label: Могу приложить лог из %LOCALAPPDATA%\SheetViewsMap (если есть)

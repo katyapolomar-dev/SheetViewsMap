@@ -23,7 +23,7 @@ using WpfGrid = System.Windows.Controls.Grid;
 using WpfDataGridGridLinesVisibility = System.Windows.Controls.DataGridGridLinesVisibility;
 using WpfVisibility = System.Windows.Visibility;
 
-namespace PallMall
+namespace SheetViewsMap
 {
     /// <summary>
     /// Содержимое окна плагина: поиск, таблица видов с галочками и нижняя

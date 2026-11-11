@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Autodesk.Revit.DB;
 
-namespace PallMall
+namespace SheetViewsMap
 {
     /// <summary>Один будущий набор печати: имя и листы.</summary>
     public sealed class PrintSetPlan

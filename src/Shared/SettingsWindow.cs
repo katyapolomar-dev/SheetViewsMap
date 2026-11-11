@@ -2,9 +2,9 @@ using System;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
-using PallMall.Updates;
+using SheetViewsMap.Updates;
 
-namespace PallMall
+namespace SheetViewsMap
 {
     /// <summary>
     /// Окно «Настройки»: версия плагина и проверка обновлений с GitHub Releases.
@@ -27,7 +27,7 @@ namespace PallMall
 
         internal SettingsWindow(int revitYear)
         {
-            Title = "Настройки — PallMall";
+            Title = "Настройки — Sheet Views Map";
             Width = 640;
             MinWidth = 520;
             MinHeight = 320;

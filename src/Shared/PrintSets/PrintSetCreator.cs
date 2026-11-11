@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Autodesk.Revit.DB;
 
-namespace PallMall
+namespace SheetViewsMap
 {
     /// <summary>Что получилось после создания наборов печати.</summary>
     internal sealed class PrintSetReport
@@ -37,7 +37,7 @@ namespace PallMall
     /// </summary>
     internal static class PrintSetCreator
     {
-        private const string TransactionName = "PallMall — наборы печати";
+        private const string TransactionName = "SheetViewsMap — наборы печати";
 
         internal static PrintSetReport Create(Document doc, IList<PrintSetPlan> plans)
         {

@@ -1,4 +1,4 @@
-# AGENTS.md — PallMall (плагин для Revit)
+# AGENTS.md — Sheet Views Map (плагин для Revit)
 
 Инструкции для ИИ-агентов и новых участников: как устроен проект, как собирать, что можно и чего нельзя.
 
@@ -13,7 +13,7 @@
 
 ## Project identity
 
-- C#-плагин **PallMall** («Виды на листах») для Autodesk Revit 2021 и 2025 (исходники 2023 тоже в репозитории).
+- C#-плагин **Sheet Views Map** («Виды на листах») для Autodesk Revit 2021 и 2025 (исходники 2023 тоже в репозитории).
 - Возможности: таблица проблемных видов на листах; проверка нумерации разрезов — должна начинаться с 1 и идти по порядку, включая парные листы «(начало)» / «(окончание)»; режим «Наследовать отметку» (автовключение опции при черчении труб); окно «Настройки» с проверкой обновлений с GitHub Releases; обновление без переустановки установщика.
 - Все сборки — `net48`, язык C# 7.3.
 
@@ -25,14 +25,14 @@
 - Строка таблицы = **лист** (не вид); номера видов листа — в выпадающем списке колонки «Листы», клик по номеру открывает вид в Revit.
 - Проверка нумерации разрезов — в `SheetMapReader` (`MarkSectionProblems`): обычные листы и «(начало)» — с 1 без пропусков; «(окончание)» — продолжает «(начало)» с тем же базовым именем.
 - Режим «Наследовать отметку» — `InheritElevationKeeper`: UI Automation (эта опция не представлена в API Revit), ищет переключатель «Наследовать отметку» / «Inherit Elevation» в ленте и включает его при черчении труб. Состояние — в `PluginSettings` (`settings.ini`).
-- Обновления — `Updates/UpdateService.cs` + внешний апдейтер `src/PallMall.Updater` (консоль net48 без зависимостей): GitHub Releases → staging → маркер `update-pending.txt` → апдейтер ждёт закрытия Revit и подменяет DLL в `%LOCALAPPDATA%\PallMall\<год>\`.
+- Обновления — `Updates/UpdateService.cs` + внешний апдейтер `src/SheetViewsMap.Updater` (консоль net48 без зависимостей): GitHub Releases → staging → маркер `update-pending.txt` → апдейтер ждёт закрытия Revit и подменяет DLL в `%LOCALAPPDATA%\SheetViewsMap\<год>\`.
 - Наборы печати — `PrintSets/`: окно открывается сразу, данные приходят через `PrintSetsDataHandler` (лёгкое чтение `PrintSetReader`: только листы, комплект и формат — без видов и разрезов). `PrintSetPlanner` группирует листы по «комплект_формат» (без Revit API), `PrintSetCreator` создаёт и обновляет `ViewSheetSet` в транзакции, `PrintSetsCommand` + `PrintSetsWindow` — окно с кнопкой-фильтром по комплектам, кнопка в панели и `CreatePrintSetsHandler` — быстрый вариант по фильтру «Комплект». Формат читает `SheetFormatReader` с основной надписи («Формат А» и «Кратность»); основные надписи собираются одним проходом по модели.
 
 ## Build & version
 
 - Версия задаётся **только** в `Version.txt` и подставляется во все сборки через `Directory.Build.props`. В csproj версию не дублировать.
-- Сборка плагина: `dotnet build src\Revit<Год>\PallMall<Год>.csproj -c Release -p:RevitVersion=<Год>` — нужен установленный Revit этого года (кроме 2025: есть NuGet-fallback RevitAPI).
-- Релиз: `release_setup\make_installer.cmd` → пересборка DLL, staging, zip-ассеты `PallMall-<год>.zip`, установщик `PallMall_Setup_v<версия>.exe` (Inno Setup, ISCC ищется в стандартных путях, включая `D:\InnoSetup7`).
+- Сборка плагина: `dotnet build src\Revit<Год>\SheetViewsMap<Год>.csproj -c Release -p:RevitVersion=<Год>` — нужен установленный Revit этого года (кроме 2025: есть NuGet-fallback RevitAPI).
+- Релиз: `release_setup\make_installer.cmd` → пересборка DLL, staging, zip-ассеты `SheetViewsMap-<год>.zip`, установщик `SheetViewsMap_Setup_v<версия>.exe` (Inno Setup, ISCC ищется в стандартных путях, включая `D:\InnoSetup7`).
 - Перед установкой на машину — **закрыть Revit**: он блокирует DLL плагина.
 - Публикация релиза — через GitHub API (создание релиза + загрузка ассетов: exe + zip-ы всех годов). Без zip-ассетов проверка обновлений не найдёт файлы.
 
@@ -56,6 +56,6 @@
 ## Testing
 
 - Автотестов нет — проверка вручную в Revit: кнопка «Обновить», черчение труб (режим «Наследовать отметку»), окно «Настройки» → «Проверить обновления».
-- Файлы плагина: `%LOCALAPPDATA%\PallMall\<год>\`, манифесты: `%APPDATA%\Autodesk\Revit\Addins\<год>\`.
+- Файлы плагина: `%LOCALAPPDATA%\SheetViewsMap\<год>\`, манифесты: `%APPDATA%\Autodesk\Revit\Addins\<год>\`.
 - После пересборки — перезапуск Revit (он держит загруженную DLL).
 - Установка обновления: закрыть Revit → запустить установщик, либо «Настройки» → «Проверить обновления» до закрытия.

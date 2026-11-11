@@ -6,18 +6,18 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 
-namespace PallMall.Updater
+namespace SheetViewsMap.Updater
 {
     /// <summary>
-    /// Внешний апдейтер PallMall.
+    /// Внешний апдейтер SheetViewsMap.
     ///
     /// Плагин скачивает обновление во staging-папку и создаёт маркер-файл
     /// update-pending.txt, затем запускает эту программу и завершать Revit
     /// может спокойно: апдейтер дожидается выхода всех процессов Revit и
     /// копирует *.dll/*.pdb из staging в целевые папки годов.
     ///
-    /// Запуск: PallMall.Updater.exe [путь-к-маркеру] (по умолчанию
-    /// %LOCALAPPDATA%\PallMall\update-pending.txt).
+    /// Запуск: SheetViewsMap.Updater.exe [путь-к-маркеру] (по умолчанию
+    /// %LOCALAPPDATA%\SheetViewsMap\update-pending.txt).
     /// </summary>
     internal static class Program
     {
@@ -25,7 +25,7 @@ namespace PallMall.Updater
         private const string RevitProcessName = "Revit";
 
         /// <summary>Файлы апдейтера не подменяются самим собой.</summary>
-        private const string UpdaterPrefix = "PallMall.Updater";
+        private const string UpdaterPrefix = "SheetViewsMap.Updater";
 
         private static readonly TimeSpan RevitWaitTimeout = TimeSpan.FromMinutes(5);
 
@@ -34,7 +34,7 @@ namespace PallMall.Updater
         private static int Main(string[] args)
         {
             string rootDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PallMall");
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SheetViewsMap");
 
             string markerPath = args != null && args.Length > 0
                 ? args[0]
@@ -42,7 +42,7 @@ namespace PallMall.Updater
 
             _logPath = Path.Combine(rootDir, "updater-log.txt");
 
-            Log("=== PallMall.Updater started ===");
+            Log("=== SheetViewsMap.Updater started ===");
 
             try
             {
@@ -77,7 +77,7 @@ namespace PallMall.Updater
             }
             finally
             {
-                Log("=== PallMall.Updater exited ===");
+                Log("=== SheetViewsMap.Updater exited ===");
             }
         }
 

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    Внешний апдейтер PallMall.
+    Внешний апдейтер SheetViewsMap.
 
     Крошечная консольная программа без зависимостей от Revit API:
     её запускает плагин после скачивания обновления, она дожидается
@@ -15,10 +15,10 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net48</TargetFramework>
     <LangVersion>7.3</LangVersion>
-    <AssemblyName>PallMall.Updater</AssemblyName>
-    <RootNamespace>PallMall.Updater</RootNamespace>
-    <Product>PallMall</Product>
-    <Company>PallMall</Company>
+    <AssemblyName>SheetViewsMap.Updater</AssemblyName>
+    <RootNamespace>SheetViewsMap.Updater</RootNamespace>
+    <Product>Sheet Views Map</Product>
+    <Company>SheetViewsMap</Company>
     <NeutralLanguage>ru-RU</NeutralLanguage>
     <DebugType>none</DebugType>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>

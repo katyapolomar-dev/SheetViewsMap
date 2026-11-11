@@ -7,7 +7,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 
-namespace PallMall
+namespace SheetViewsMap
 {
     /// <summary>
     /// Цвета и готовые элементы интерфейса.

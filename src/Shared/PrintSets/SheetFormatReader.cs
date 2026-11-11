@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Autodesk.Revit.DB;
 
-namespace PallMall
+namespace SheetViewsMap
 {
     /// <summary>
     /// Читает формат листа с основной надписи: «Формат А» (1 = А1) и «Кратность».

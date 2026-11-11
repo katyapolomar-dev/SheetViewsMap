@@ -1,12 +1,12 @@
 @echo off
 chcp 65001 >nul
 rem =============================================================
-rem   PallMall - сборка плагина и установка в Revit
+rem   SheetViewsMap - сборка плагина и установка в Revit
 rem
 rem   Запуск: двойной щелчок по этому файлу.
 rem   Что делает:
 rem     1. Собирает плагин под каждую установленную версию Revit.
-rem     2. Копирует готовую DLL в %LOCALAPPDATA%\PallMall\ГОД\
+rem     2. Копирует готовую DLL в %LOCALAPPDATA%\SheetViewsMap\ГОД\
 rem     3. Кладёт файл .addin в папку аддинов Revit.
 rem
 rem   ВАЖНО: перед сборкой закройте Revit. Открытый Revit держит
@@ -16,13 +16,13 @@ setlocal enabledelayedexpansion
 
 set "ROOT=%~dp0"
 set "VERSIONS=2021 2025"
-set "DEPLOY=%LOCALAPPDATA%\PallMall"
-set "TMPL=%ROOT%addins\PallMall.addin.template"
+set "DEPLOY=%LOCALAPPDATA%\SheetViewsMap"
+set "TMPL=%ROOT%addins\SheetViewsMap.addin.template"
 set "BUILT=0"
 set "FAILED=0"
 
 echo ============================================================
-echo   PallMall - сборка и установка
+echo   SheetViewsMap - сборка и установка
 echo ============================================================
 echo.
 
@@ -42,9 +42,9 @@ if not errorlevel 1 (
     echo.
 )
 
-if exist "%LOCALAPPDATA%\SheetViewsMap" (
-    echo [ВНИМАНИЕ] Осталась папка прежнего имени: %LOCALAPPDATA%\SheetViewsMap
-    echo   Запустите установщик PallMall_Setup: он перенесёт настройки
+if exist "%LOCALAPPDATA%\PallMall" (
+    echo [ВНИМАНИЕ] Осталась папка короткого имени: %LOCALAPPDATA%\PallMall
+    echo   Запустите установщик SheetViewsMap_Setup: он перенесёт настройки
     echo   и удалит старую установку.
     echo.
 )
@@ -70,7 +70,7 @@ echo   DLL:         %DEPLOY%\ГОД\
 echo   Файлы .addin: %APPDATA%\Autodesk\Revit\Addins\ГОД\
 echo.
 echo   Теперь запустите Revit заново. На ленте появится вкладка
-echo   "PallMall" с кнопкой открытия панели.
+echo   "SheetViewsMap" с кнопкой открытия панели.
 echo ============================================================
 exit /b 0
 
@@ -87,21 +87,21 @@ if not exist "%ProgramFiles%\Autodesk\Revit !V!\RevitAPI.dll" (
 )
 
 echo --- Сборка для Revit !V! ---
-dotnet build "%ROOT%src\Revit!V!\PallMall!V!.csproj" -c Release -p:RevitVersion=!V!
+dotnet build "%ROOT%src\Revit!V!\SheetViewsMap!V!.csproj" -c Release -p:RevitVersion=!V!
 if errorlevel 1 (
     echo [!V!] ОШИБКА СБОРКИ. Смотрите сообщения выше.
     set /a FAILED+=1
     exit /b 1
 )
 
-set "DLL_SRC=%ROOT%out\!V!\PallMall!V!.dll"
+set "DLL_SRC=%ROOT%out\!V!\SheetViewsMap!V!.dll"
 if not exist "!DLL_SRC!" (
     echo [!V!] ОШИБКА: ожидался файл "!DLL_SRC!", но его нет.
     exit /b 1
 )
 
 if not exist "!DEPLOY!\!V!" mkdir "!DEPLOY!\!V!"
-set "DLL_DST=!DEPLOY!\!V!\PallMall!V!.dll"
+set "DLL_DST=!DEPLOY!\!V!\SheetViewsMap!V!.dll"
 
 rem Копия может не пройти, если Revit открыт и держит файл.
 rem Поэтому проверяем не только код возврата, но и результат побайтового сравнения.
@@ -124,11 +124,11 @@ set /a FAILED+=1
 exit /b 1
 
 :copy_ok
-if exist "%ROOT%out\!V!\PallMall!V!.pdb" copy /Y "%ROOT%out\!V!\PallMall!V!.pdb" "!DEPLOY!\!V!\" >nul 2>&1
+if exist "%ROOT%out\!V!\SheetViewsMap!V!.pdb" copy /Y "%ROOT%out\!V!\SheetViewsMap!V!.pdb" "!DEPLOY!\!V!\" >nul 2>&1
 
 set "ADDIN_DIR=%APPDATA%\Autodesk\Revit\Addins\!V!"
 if not exist "!ADDIN_DIR!" mkdir "!ADDIN_DIR!"
-set "ADDIN_FILE=!ADDIN_DIR!\PallMall.addin"
+set "ADDIN_FILE=!ADDIN_DIR!\SheetViewsMap.addin"
 set "DLL_PATH=!DLL_DST!"
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
@@ -140,8 +140,8 @@ if not exist "!ADDIN_FILE!" (
     exit /b 1
 )
 
-rem Манифест прежнего имени рядом: если оставить, Revit загрузит старую DLL.
-if exist "!ADDIN_DIR!\SheetViewsMap.addin" del /q "!ADDIN_DIR!\SheetViewsMap.addin"
+rem Манифест короткого имени рядом: если оставить, Revit загрузит старую DLL.
+if exist "!ADDIN_DIR!\PallMall.addin" del /q "!ADDIN_DIR!\PallMall.addin"
 
 set /a BUILT+=1
 echo [!V!] OK - DLL и .addin установлены.
