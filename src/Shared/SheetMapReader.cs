@@ -47,6 +47,11 @@ namespace PallMall
             // поэтому собираем их отдельно и добавляем к списку видов листа.
             Dictionary<ElementId, List<ElementId>> schedulesBySheet = CollectSchedules(doc);
 
+            // Основные надписи собираем одним проходом по модели и раскладываем
+            // по листам: иначе на каждый лист был бы отдельный обход документа.
+            Dictionary<ElementId, List<FamilyInstance>> titleBlocksBySheet =
+                SheetFormatReader.CollectBySheet(doc);
+
             // Проход 1: собираем по каждому листу виды, комплект и номера разрезов.
             // Сразу проверить нельзя: листу «(окончание)» нужно знать, сколько
             // разрезов на парном листе «(начало)».
@@ -70,6 +75,13 @@ namespace PallMall
                 List<ElementId> viewIdsOrdered;
                 CollectViews(doc, viewIds, out viewNumbers, out viewIdsOrdered);
 
+                string formatProblem;
+                bool multipleTitleBlocks;
+
+                List<FamilyInstance> sheetTitleBlocks;
+                if (!titleBlocksBySheet.TryGetValue(sheet.Id, out sheetTitleBlocks))
+                    sheetTitleBlocks = new List<FamilyInstance>();
+
                 infos.Add(new SheetInfo
                 {
                     Sheet = sheet,
@@ -80,7 +92,10 @@ namespace PallMall
                     IsEnd = name.IsEnd,
                     Sections = CollectSectionNumbers(doc, viewIds),
                     ViewNumbers = viewNumbers,
-                    ViewIdsOrdered = viewIdsOrdered
+                    ViewIdsOrdered = viewIdsOrdered,
+                    Format = SheetFormatReader.Read(sheetTitleBlocks, out formatProblem, out multipleTitleBlocks),
+                    FormatProblem = formatProblem,
+                    HasMultipleTitleBlocks = multipleTitleBlocks
                 });
             }
 
@@ -110,6 +125,20 @@ namespace PallMall
 
             data.SheetCount = sheets.Count;
             data.PlacedViewCount = infos.Sum(i => i.ViewIds.Count);
+
+            // Все листы (не только проблемные) — источник для наборов печати.
+            data.AllSheets = infos
+                .Select(i => new SheetPrintInfo
+                {
+                    SheetId = i.Sheet.Id,
+                    Number = SafeSheetNumber(i.Sheet),
+                    SetName = i.SetKey,
+                    Format = i.Format,
+                    FormatProblem = i.FormatProblem,
+                    HasMultipleTitleBlocks = i.HasMultipleTitleBlocks
+                })
+                .OrderBy(s => s.Number, NaturalStringComparer.Instance)
+                .ToList();
 
             return data;
         }
@@ -156,7 +185,7 @@ namespace PallMall
         /// написания («ADSK_» без префикса, другое местоимение), а сам параметр
         /// может быть не текстовым, а ссылкой на элемент - тогда берём имя элемента.
         /// </summary>
-        private static string GetSetKey(ViewSheet sheet)
+        internal static string GetSetKey(ViewSheet sheet)
         {
             Parameter parameter = FindSetParameter(sheet);
             if (parameter == null || !parameter.HasValue)
@@ -236,6 +265,15 @@ namespace PallMall
 
             /// <summary>Идентификаторы видов — параллельно ViewNumbers.</summary>
             public List<ElementId> ViewIdsOrdered;
+
+            /// <summary>Подпись формата листа («А1», «А1x3»); null — определить не удалось.</summary>
+            public string Format;
+
+            /// <summary>Почему формат не определён (для отчёта наборов печати).</summary>
+            public string FormatProblem;
+
+            /// <summary>На листе больше одной основной надписи.</summary>
+            public bool HasMultipleTitleBlocks;
 
             public bool IsProblem;
             public string Issue;
@@ -590,6 +628,7 @@ namespace PallMall
                 return "(без номера)";
             }
         }
+
     }
 
     /// <summary>

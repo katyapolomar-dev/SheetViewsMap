@@ -26,6 +26,7 @@
 - Проверка нумерации разрезов — в `SheetMapReader` (`MarkSectionProblems`): обычные листы и «(начало)» — с 1 без пропусков; «(окончание)» — продолжает «(начало)» с тем же базовым именем.
 - Режим «Наследовать отметку» — `InheritElevationKeeper`: UI Automation (эта опция не представлена в API Revit), ищет переключатель «Наследовать отметку» / «Inherit Elevation» в ленте и включает его при черчении труб. Состояние — в `PluginSettings` (`settings.ini`).
 - Обновления — `Updates/UpdateService.cs` + внешний апдейтер `src/PallMall.Updater` (консоль net48 без зависимостей): GitHub Releases → staging → маркер `update-pending.txt` → апдейтер ждёт закрытия Revit и подменяет DLL в `%LOCALAPPDATA%\PallMall\<год>\`.
+- Наборы печати — `PrintSets/`: окно открывается сразу, данные приходят через `PrintSetsDataHandler` (лёгкое чтение `PrintSetReader`: только листы, комплект и формат — без видов и разрезов). `PrintSetPlanner` группирует листы по «комплект_формат» (без Revit API), `PrintSetCreator` создаёт и обновляет `ViewSheetSet` в транзакции, `PrintSetsCommand` + `PrintSetsWindow` — окно с кнопкой-фильтром по комплектам, кнопка в панели и `CreatePrintSetsHandler` — быстрый вариант по фильтру «Комплект». Формат читает `SheetFormatReader` с основной надписи («Формат А» и «Кратность»); основные надписи собираются одним проходом по модели.
 
 ## Build & version
 

@@ -25,6 +25,13 @@ namespace PallMall
         /// <summary>Подпись на кнопке настроек.</summary>
         internal const string SettingsButtonText = "Настройки";
 
+        /// <summary>Подпись на кнопке наборов печати.</summary>
+        internal const string PrintSetsButtonText = "Наборы печати";
+
+        /// <summary>Подсказка при наведении на кнопку наборов печати.</summary>
+        internal const string PrintSetsButtonToolTip =
+            "Наборы печати по комплектам и форматам листов: имя набора — «комплект_формат», например «АР_А1x3». Повторный запуск обновляет наборы.";
+
         /// <summary>Подсказка при наведении на кнопку настроек.</summary>
         internal const string SettingsButtonToolTip =
             "Версия плагина и проверка обновлений.";

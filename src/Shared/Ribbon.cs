@@ -114,6 +114,7 @@ namespace PallMall
         private const string ButtonName = "PallMallPaneButton";
         private const string SettingsButtonName = "PallMallSettingsButton";
         private const string InheritElevationButtonName = "PallMallInheritElevationButton";
+        private const string PrintSetsButtonName = "PallMallPrintSetsButton";
 
         /// <summary>Кнопка-переключатель «Наследовать отметку» (нужна для обновления состояния).</summary>
         internal static PushButton InheritElevationButton { get; private set; }
@@ -142,7 +143,11 @@ namespace PallMall
             }
 
             // Защита от повторных кнопок, если аддины перечитали без перезапуска Revit.
-            if (panel.GetItems().Any(i => i.Name == SettingsButtonName || i.Name == ButtonName || i.Name == InheritElevationButtonName))
+            if (panel.GetItems().Any(i =>
+                i.Name == SettingsButtonName ||
+                i.Name == ButtonName ||
+                i.Name == InheritElevationButtonName ||
+                i.Name == PrintSetsButtonName))
                 return;
 
             // Кнопка «Настройки» — первая на панели (как в AssemblingManager):
@@ -202,6 +207,30 @@ namespace PallMall
             }
 
             panel.AddItem(data);
+
+            // Кнопка «Наборы печати»: диалог со списком наборов и фильтром по комплектам.
+            var printSetsData = new PushButtonData(
+                PrintSetsButtonName,
+                App.PrintSetsButtonText,
+                typeof(App).Assembly.Location,
+                typeof(PrintSetsCommand).FullName)
+            {
+                ToolTip = App.PrintSetsButtonToolTip,
+                LongDescription = App.PrintSetsButtonToolTip
+            };
+
+            try
+            {
+                ImageSource printSetsIcon = Theme.CreatePrintSetsIcon();
+                printSetsData.LargeImage = printSetsIcon;
+                printSetsData.Image = printSetsIcon;
+            }
+            catch (Exception)
+            {
+                // Без иконки кнопка тоже работает, просто выглядит пустой.
+            }
+
+            panel.AddItem(printSetsData);
         }
 
         /// <summary>Обновляет подпись, подсказку и иконку переключателя по текущему режиму.</summary>

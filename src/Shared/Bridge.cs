@@ -21,6 +21,8 @@ namespace PallMall
 
         private static ExternalEvent _refreshEvent;
         private static ExternalEvent _navigateEvent;
+        private static ExternalEvent _printSetsEvent;
+        private static ExternalEvent _printSetDataEvent;
 
         private static SheetMapData _lastData;
         private static bool _refreshDone;
@@ -37,10 +39,26 @@ namespace PallMall
         private static string _lastNavigateError;
         private static bool _navigateDone;
 
+        /// <summary>Готовый к созданию список наборов и результат последнего запуска.</summary>
+        private static List<PrintSetPlan> _pendingPrintSets;
+        private static PrintSetReport _lastPrintSetReport;
+        private static string _lastPrintSetError;
+        private static bool _printSetsDone;
+
+        /// <summary>Результат лёгкого чтения листов для окна наборов печати.</summary>
+        private static PrintSetData _lastPrintSetData;
+        private static bool _printSetDataDone;
+
         /// <summary>Готов ли плагин к работе (события созданы в OnStartup).</summary>
         internal static bool IsReady
         {
-            get { return _refreshEvent != null && _navigateEvent != null; }
+            get
+            {
+                return _refreshEvent != null
+                    && _navigateEvent != null
+                    && _printSetsEvent != null
+                    && _printSetDataEvent != null;
+            }
         }
 
         internal static void Initialize()
@@ -49,6 +67,8 @@ namespace PallMall
 
             _refreshEvent = ExternalEvent.Create(new RefreshHandler());
             _navigateEvent = ExternalEvent.Create(new NavigateHandler());
+            _printSetsEvent = ExternalEvent.Create(new CreatePrintSetsHandler());
+            _printSetDataEvent = ExternalEvent.Create(new PrintSetsDataHandler());
         }
 
         // ------------------------------------------------------------------ чтение модели
@@ -196,6 +216,108 @@ namespace PallMall
 
                 _navigateDone = false;
                 error = _lastNavigateError;
+                return true;
+            }
+        }
+
+        // ------------------------------------------------------------------ наборы печати
+
+        /// <summary>Просит прочитать листы для окна наборов печати.</summary>
+        internal static bool RequestPrintSetData()
+        {
+            ExternalEvent ev = _printSetDataEvent;
+            if (ev == null || ev.IsPending)
+                return false;
+
+            lock (Sync)
+            {
+                _lastPrintSetData = null;
+                _printSetDataDone = false;
+            }
+
+            ev.Raise();
+            return true;
+        }
+
+        internal static void PublishPrintSetData(PrintSetData data)
+        {
+            lock (Sync)
+            {
+                _lastPrintSetData = data;
+                _printSetDataDone = true;
+            }
+        }
+
+        internal static bool TryTakePrintSetData(out PrintSetData data)
+        {
+            lock (Sync)
+            {
+                if (!_printSetDataDone)
+                {
+                    data = null;
+                    return false;
+                }
+
+                _printSetDataDone = false;
+                data = _lastPrintSetData;
+                return true;
+            }
+        }
+
+        /// <summary>Просит создать наборы печати. false — предыдущий запрос ещё в работе.</summary>
+        internal static bool RequestCreatePrintSets(IList<PrintSetPlan> plans)
+        {
+            ExternalEvent ev = _printSetsEvent;
+            if (ev == null || ev.IsPending)
+                return false;
+
+            lock (Sync)
+            {
+                _pendingPrintSets = new List<PrintSetPlan>(plans);
+                _lastPrintSetReport = null;
+                _lastPrintSetError = null;
+                _printSetsDone = false;
+            }
+
+            ev.Raise();
+            return true;
+        }
+
+        internal static List<PrintSetPlan> TakePrintSetPlans()
+        {
+            lock (Sync)
+            {
+                List<PrintSetPlan> plans = _pendingPrintSets;
+                _pendingPrintSets = null;
+                return plans ?? new List<PrintSetPlan>();
+            }
+        }
+
+        internal static void PublishPrintSetResult(PrintSetReport report, string error)
+        {
+            lock (Sync)
+            {
+                _lastPrintSetReport = report;
+                _lastPrintSetError = error;
+                _printSetsDone = true;
+            }
+        }
+
+        /// <summary>Забирает результат создания наборов. true — можно показывать.</summary>
+        internal static bool TryTakePrintSetResult(out PrintSetReport report, out string error)
+        {
+            lock (Sync)
+            {
+                if (!_printSetsDone)
+                {
+                    report = null;
+                    error = null;
+                    return false;
+                }
+
+                _printSetsDone = false;
+                report = _lastPrintSetReport;
+                error = _lastPrintSetError;
                 return true;
             }
         }

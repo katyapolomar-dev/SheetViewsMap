@@ -328,6 +328,54 @@ namespace PallMall
             return image;
         }
 
+        /// <summary>
+        /// Иконка кнопки «Наборы печати»: два листа друг за другом
+        /// в тех же розовых тонах, что и остальные иконки.
+        /// </summary>
+        internal static ImageSource CreatePrintSetsIcon()
+        {
+            var drawing = new DrawingGroup();
+
+            // Прозрачный квадрат задаёт размер иконки ровно 32x32.
+            drawing.Children.Add(new GeometryDrawing(
+                Brushes.Transparent, null, new RectangleGeometry(new Rect(0, 0, 32, 32))));
+
+            var fill = new LinearGradientBrush();
+            fill.StartPoint = new System.Windows.Point(0.3, 0);
+            fill.EndPoint = new System.Windows.Point(0.7, 1);
+            fill.GradientStops.Add(new GradientStop(Color.FromRgb(0xF9, 0xD6, 0xE2), 0.0));
+            fill.GradientStops.Add(new GradientStop(Color.FromRgb(0xF2, 0xC1, 0xD1), 0.55));
+            fill.GradientStops.Add(new GradientStop(Color.FromRgb(0xE0, 0xA8, 0xBD), 1.0));
+            fill.Freeze();
+
+            var stroke = new Pen(IconStroke, 1.4);
+            stroke.Freeze();
+
+            // Задний лист — только контур, чтобы не спорил с передним.
+            var back = new RectangleGeometry(new Rect(3.5, 3.5, 15, 20), 1.8, 1.8);
+            drawing.Children.Add(new GeometryDrawing(null, stroke, back));
+
+            // Передний лист — с заливкой, он перекрывает задний.
+            var front = new RectangleGeometry(new Rect(11, 8.5, 17, 20), 1.8, 1.8);
+            drawing.Children.Add(new GeometryDrawing(fill, stroke, front));
+
+            // Строки «текста» на переднем листе — тёмные, чтобы читались на розовом.
+            var lineBrush = new SolidColorBrush(Color.FromRgb(0x0E, 0x3B, 0x33));
+            lineBrush.Freeze();
+
+            for (int i = 0; i < 3; i++)
+            {
+                var line = new RectangleGeometry(new Rect(14.5, 14.5 + i * 4.2, 10, 1.6), 0.8, 0.8);
+                drawing.Children.Add(new GeometryDrawing(lineBrush, null, line));
+            }
+
+            drawing.Freeze();
+
+            var image = new DrawingImage(drawing);
+            image.Freeze();
+            return image;
+        }
+
         // ------------------------------------------------------------------ поле поиска
 
         internal static TextBox CreateSearchBox()

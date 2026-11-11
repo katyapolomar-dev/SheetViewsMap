@@ -44,6 +44,7 @@ namespace PallMall
         private readonly TextBlock _selectionLabel;
         private readonly Button _copyButton;
         private readonly Button _refreshButton;
+        private readonly Button _printSetsButton;
 
         // Выпадающий список проблемных видов листа (один на всё окно,
         // открывается щелчком по номеру листа в колонке «Листы»).
@@ -58,7 +59,13 @@ namespace PallMall
 
         private bool _initialLoadRequested;
 
-        private const string AllSets = "Все комплекты";
+        /// <summary>Последнее прочитанное состояние модели (для наборов печати).</summary>
+        private SheetMapData _lastData;
+
+        /// <summary>Ждём результат создания наборов, запрошенного этой панелью.</summary>
+        private bool _awaitingPrintSets;
+
+        private const string AllSets = PrintSetPlanner.AllSets;
 
         /// <summary>Ширина слота под номер листа - от неё зависит выравнивание значков.</summary>
         private const double SheetNumberSlotWidth = 78;
@@ -100,6 +107,14 @@ namespace PallMall
             _setBox.ToolTip = "Комплект листов (параметр «ADSK_Штамп Раздел проекта»)";
             _setBox.SelectionChanged += (s, e) => ApplyFilter();
             setStack.Children.Add(_setBox);
+
+            // Второй вариант входа в наборы печати: без диалога, по текущему фильтру.
+            _printSetsButton = Theme.CreateButton("Наборы печати", false);
+            _printSetsButton.Margin = new Thickness(8, 0, 0, 0);
+            _printSetsButton.ToolTip =
+                "Создать наборы печати для выбранного комплекта (или для всех): имя набора — «комплект_формат», например «АР_А1x3».";
+            _printSetsButton.Click += (s, e) => CreatePrintSets();
+            setStack.Children.Add(_printSetsButton);
             WpfGrid.SetColumn(setStack, 0);
             filterRow.Children.Add(setStack);
 
@@ -365,6 +380,18 @@ namespace PallMall
                     _nextSheetAllowedAt = DateTime.Now.AddMilliseconds(SheetStepDelayMs);
             }
 
+            PrintSetReport printSetsReport;
+            string printSetsError;
+            if (_awaitingPrintSets && Bridge.TryTakePrintSetResult(out printSetsReport, out printSetsError))
+            {
+                _awaitingPrintSets = false;
+
+                if (printSetsError != null)
+                    SetStatus("Не удалось создать наборы печати: " + printSetsError, true);
+                else
+                    SetStatus(DescribeReport(printSetsReport), printSetsReport.Errors.Count > 0);
+            }
+
             SheetMapData data;
             if (Bridge.TryTakeData(out data))
                 Render(data);
@@ -396,10 +423,84 @@ namespace PallMall
             SetStatus("Читаю листы и виды из модели…");
         }
 
+        // ------------------------------------------------------------------ наборы печати
+
+        /// <summary>
+        /// Быстрый вариант: создать наборы по текущему фильтру «Комплект»,
+        /// без диалога. Работу выполняет обработчик ExternalEvent.
+        /// </summary>
+        private void CreatePrintSets()
+        {
+            if (_lastData == null || _lastData.AllSheets == null)
+            {
+                SetStatus("Сначала нажмите «Обновить», чтобы прочитать листы из модели.", true);
+                return;
+            }
+
+            if (!Bridge.IsReady)
+            {
+                SetStatus("Плагин ещё загружается — попробуйте через секунду.", true);
+                return;
+            }
+
+            string filter = _setBox.SelectedItem as string;
+            PrintSetPlanResult plan = PrintSetPlanner.Build(_lastData.AllSheets, filter);
+
+            if (plan.Plans.Count == 0)
+            {
+                SetStatus("Наборы не созданы: " + DescribeSkipped(plan), true);
+                return;
+            }
+
+            if (!Bridge.RequestCreatePrintSets(plan.Plans))
+            {
+                SetStatus("Создание наборов уже выполняется, подождите…");
+                return;
+            }
+
+            _awaitingPrintSets = true;
+            SetStatus(string.Format("Создаю наборы печати: {0}, листов: {1}…",
+                plan.Plans.Count, plan.SheetCount));
+        }
+
+        private static string DescribeReport(PrintSetReport report)
+        {
+            var parts = new List<string>();
+
+            if (report.Created.Count > 0)
+                parts.Add("создано: " + report.Created.Count);
+
+            if (report.Updated.Count > 0)
+                parts.Add("обновлено: " + report.Updated.Count);
+
+            parts.Add("листов: " + report.SheetCount);
+
+            string text = "Наборы печати — " + string.Join(", ", parts) + ".";
+
+            if (report.Errors.Count > 0)
+                text += " Ошибки: " + string.Join("; ", report.Errors);
+
+            return text;
+        }
+
+        private static string DescribeSkipped(PrintSetPlanResult plan)
+        {
+            if (plan.Skipped.Count == 0)
+                return "подходящих листов нет (проверьте комплект и формат на основных надписях).";
+
+            string reasons = string.Join(", ", plan.Skipped
+                .GroupBy(s => s.Reason)
+                .OrderByDescending(g => g.Count())
+                .Select(g => g.Key + " — " + g.Count()));
+
+            return string.Format("пропущено листов: {0} ({1}).", plan.Skipped.Count, reasons);
+        }
+
         private void Render(SheetMapData data)
         {
             UnsubscribeRows();
 
+            _lastData = data;
             _allRows.Clear();
 
             if (!string.IsNullOrEmpty(data.Error))
@@ -439,10 +540,16 @@ namespace PallMall
         private void FillSetList()
         {
             var sets = new List<string> { AllSets };
-            sets.AddRange(_allRows
-                .SelectMany(r => (r.Sets ?? string.Empty).Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries))
+
+            // Берём комплекты со ВСЕХ листов, а не только с проблемных:
+            // иначе комплект, где нет ошибок нумерации, нельзя выбрать.
+            IEnumerable<string> source = (_lastData != null && _lastData.AllSheets != null)
+                ? _lastData.AllSheets.Select(s => s.SetName)
+                : _allRows.Select(r => r.Sets);
+
+            sets.AddRange(source
+                .Where(s => !string.IsNullOrEmpty(s) && s != PrintSetPlanner.NoSet)
                 .Select(s => s.Trim())
-                .Where(s => s.Length > 0)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(s => s, StringComparer.OrdinalIgnoreCase));
 

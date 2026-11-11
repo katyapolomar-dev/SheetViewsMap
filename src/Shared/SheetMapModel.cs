@@ -90,6 +90,12 @@ namespace PallMall
 
         public List<SheetMapRow> Rows { get; set; }
 
+        /// <summary>
+        /// Все листы документа (не только проблемные) — источник для наборов печати.
+        /// Заполняется в том же чтении модели, чтобы не читать её второй раз.
+        /// </summary>
+        public List<SheetPrintInfo> AllSheets { get; set; }
+
         public static SheetMapData Failed(string message)
         {
             return new SheetMapData
@@ -98,7 +104,8 @@ namespace PallMall
                 Error = message,
                 SheetCount = 0,
                 PlacedViewCount = 0,
-                Rows = new List<SheetMapRow>()
+                Rows = new List<SheetMapRow>(),
+                AllSheets = new List<SheetPrintInfo>()
             };
         }
     }
