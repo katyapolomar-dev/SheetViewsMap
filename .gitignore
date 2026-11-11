@@ -4,3 +4,10 @@
 out/
 .vs/
 *.user
+
+# Release artifacts: built locally, published to GitHub Releases
+release_setup/*.zip
+release_setup/*.exe
+
+# Local snapshots of old builds
+backup_*/

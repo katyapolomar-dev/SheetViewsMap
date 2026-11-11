@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Add-in manifest template for Sheet Views Map.
+  Add-in manifest template for PallMall.
 
   build.cmd substitutes the real DLL path here and writes the
   resulting .addin file into the Revit add-ins folder.
@@ -11,11 +11,11 @@
 -->
 <RevitAddIns>
   <AddIn Type="Application">
-    <Name>SheetViewsMap</Name>
+    <Name>PallMall</Name>
     <Assembly>__ASSEMBLY__</Assembly>
     <AddInId>9f2a7c41-58d6-4b0e-9a73-1c4e8d5f0b26</AddInId>
-    <FullClassName>SheetViewsMap.App</FullClassName>
-    <VendorId>SVMP</VendorId>
-    <VendorDescription>Sheet Views Map</VendorDescription>
+    <FullClassName>PallMall.App</FullClassName>
+    <VendorId>PLML</VendorId>
+    <VendorDescription>PallMall</VendorDescription>
   </AddIn>
 </RevitAddIns>

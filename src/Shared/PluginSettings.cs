@@ -1,17 +1,17 @@
 using System;
 using System.IO;
 
-namespace SheetViewsMap
+namespace PallMall
 {
     /// <summary>
-    /// Настройки плагина: хранятся в %LOCALAPPDATA%\SheetViewsMap\settings.ini
+    /// Настройки плагина: хранятся в %LOCALAPPDATA%\PallMall\settings.ini
     /// и переживают перезапуск Revit.
     /// </summary>
     internal static class PluginSettings
     {
         private static readonly string SettingsPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "SheetViewsMap", "settings.ini");
+            "PallMall", "settings.ini");
 
         /// <summary>
         /// Режим «Наследовать отметку»: пока включён, плагин автоматически

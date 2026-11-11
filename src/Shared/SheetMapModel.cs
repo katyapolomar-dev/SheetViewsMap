@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using Autodesk.Revit.DB;
 
-namespace SheetViewsMap
+namespace PallMall
 {
     /// <summary>
     /// Одна строка таблицы — проблемный ЛИСТ.

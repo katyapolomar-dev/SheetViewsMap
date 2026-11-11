@@ -10,10 +10,10 @@
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
     <LangVersion>7.3</LangVersion>
-    <AssemblyName>SheetViewsMap2021</AssemblyName>
-    <RootNamespace>SheetViewsMap</RootNamespace>
-    <Product>Sheet Views Map</Product>
-    <Company>SheetViewsMap</Company>
+    <AssemblyName>PallMall2021</AssemblyName>
+    <RootNamespace>PallMall</RootNamespace>
+    <Product>PallMall</Product>
+    <Company>PallMall</Company>
     <NeutralLanguage>ru-RU</NeutralLanguage>
     <DebugType>portable</DebugType>
     <PlatformTarget>AnyCPU</PlatformTarget>

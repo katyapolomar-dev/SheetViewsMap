@@ -8,7 +8,7 @@ using System.Reflection;
 using System.Text;
 using System.Windows.Threading;
 
-namespace SheetViewsMap
+namespace PallMall
 {
     /// <summary>
     /// Держит опцию «Наследование отметок» включённой при черчении трубопроводов.
@@ -39,7 +39,7 @@ namespace SheetViewsMap
         private static readonly TimeSpan ThrottledLogInterval = TimeSpan.FromSeconds(30);
         private static readonly string LogPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "SheetViewsMap", "inherit-log.txt");
+            "PallMall", "inherit-log.txt");
 
         private static DispatcherTimer _timer;
         private static Type _componentManagerType;

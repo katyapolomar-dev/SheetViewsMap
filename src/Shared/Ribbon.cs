@@ -6,13 +6,13 @@ using System.Windows.Media;
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
-using SheetViewsMap.Updates;
+using PallMall.Updates;
 
 // Color и Point есть и в Revit API, и в WPF — берём версию WPF явно.
 using WpfColor = System.Windows.Media.Color;
 using WpfPoint = System.Windows.Point;
 
-namespace SheetViewsMap
+namespace PallMall
 {
     /// <summary>
     /// Команда кнопки-переключателя «Наследовать отметку»: включает или
@@ -69,7 +69,7 @@ namespace SheetViewsMap
             catch (Exception ex)
             {
                 message = ex.Message;
-                TaskDialog.Show("SheetViewsMap", "Не удалось открыть настройки:\n\n" + ex.Message);
+                TaskDialog.Show("PallMall", "Не удалось открыть настройки:\n\n" + ex.Message);
                 return Result.Failed;
             }
         }
@@ -100,7 +100,7 @@ namespace SheetViewsMap
             catch (Exception ex)
             {
                 message = ex.Message;
-                TaskDialog.Show("SheetViewsMap", "Не удалось открыть окно плагина:\n\n" + ex.Message);
+                TaskDialog.Show("PallMall", "Не удалось открыть окно плагина:\n\n" + ex.Message);
                 return Result.Failed;
             }
         }
@@ -111,9 +111,9 @@ namespace SheetViewsMap
     /// </summary>
     internal static class Ribbon
     {
-        private const string ButtonName = "SheetViewsMapPaneButton";
-        private const string SettingsButtonName = "SheetViewsMapSettingsButton";
-        private const string InheritElevationButtonName = "SheetViewsMapInheritElevationButton";
+        private const string ButtonName = "PallMallPaneButton";
+        private const string SettingsButtonName = "PallMallSettingsButton";
+        private const string InheritElevationButtonName = "PallMallInheritElevationButton";
 
         /// <summary>Кнопка-переключатель «Наследовать отметку» (нужна для обновления состояния).</summary>
         internal static PushButton InheritElevationButton { get; private set; }

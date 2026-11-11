@@ -13,7 +13,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 
-namespace SheetViewsMap.Updates
+namespace PallMall.Updates
 {
     /// <summary>Файл обновления в релизе: год Revit и адрес скачивания.</summary>
     public class ReleaseAsset
@@ -36,27 +36,27 @@ namespace SheetViewsMap.Updates
     /// Проверка обновлений и подготовка файлов обновления.
     ///
     /// Схема: GitHub Releases → скачивание zip по годам во staging-папку →
-    /// маркер-файл → внешний апдейтер (SheetViewsMap.Updater.exe) дожидается
-    /// закрытия Revit и подменяет DLL в %LOCALAPPDATA%\SheetViewsMap\&lt;год&gt;\.
+    /// маркер-файл → внешний апдейтер (PallMall.Updater.exe) дожидается
+    /// закрытия Revit и подменяет DLL в %LOCALAPPDATA%\PallMall\&lt;год&gt;\.
     /// Подменить файлы изнутри плагина нельзя — Revit держит их заблокированными.
     /// </summary>
     internal class UpdateService
     {
         private const string GitHubOwner = "katyapolomar-dev";
-        private const string GitHubRepo = "SheetViewsMap";
+        private const string GitHubRepo = "PallMall";
         private const string ReleasesApiUrl =
             "https://api.github.com/repos/" + GitHubOwner + "/" + GitHubRepo + "/releases?per_page=20";
 
-        /// <summary>Ассет обновления: SheetViewsMap-2021.zip, SheetViewsMap-2025.zip и т.д.</summary>
+        /// <summary>Ассет обновления: PallMall-2021.zip, PallMall-2025.zip и т.д.</summary>
         private static readonly Regex AssetNameRegex =
-            new Regex(@"^SheetViewsMap-(\d{4})\.zip$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+            new Regex(@"^PallMall-(\d{4})\.zip$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-        private const string UpdaterFileName = "SheetViewsMap.Updater.exe";
+        private const string UpdaterFileName = "PallMall.Updater.exe";
 
         private static readonly int[] SupportedYears = { 2021, 2025 };
 
         private static readonly string RootDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SheetViewsMap");
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PallMall");
         private static readonly string StagingDir = Path.Combine(RootDir, "staging");
         private static readonly string MarkerPath = Path.Combine(RootDir, "update-pending.txt");
 
@@ -68,7 +68,7 @@ namespace SheetViewsMap.Updates
             {
                 Timeout = TimeSpan.FromSeconds(30)
             };
-            _httpClient.DefaultRequestHeaders.Add("User-Agent", "SheetViewsMap-UpdateService");
+            _httpClient.DefaultRequestHeaders.Add("User-Agent", "PallMall-UpdateService");
             _httpClient.DefaultRequestHeaders.Accept.Add(
                 new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
         }
@@ -96,7 +96,7 @@ namespace SheetViewsMap.Updates
                 : string.Format("{0}.{1}.{2}", assemblyVersion.Major, assemblyVersion.Minor, assemblyVersion.Build);
         }
 
-        /// <summary>Год Revit, из папки которого загружен плагин (...SheetViewsMap\2021\...). 0 — не удалось определить.</summary>
+        /// <summary>Год Revit, из папки которого загружен плагин (...PallMall\2021\...). 0 — не удалось определить.</summary>
         public static int GetRevitYear()
         {
             try
@@ -231,7 +231,7 @@ namespace SheetViewsMap.Updates
                 if (asset == null)
                     throw new InvalidOperationException(
                         "В релизе v" + release.Version + " нет файла обновления для Revit " + year +
-                        " (SheetViewsMap-" + year + ".zip).");
+                        " (PallMall-" + year + ".zip).");
 
                 downloads.Add(asset);
             }
@@ -241,7 +241,7 @@ namespace SheetViewsMap.Updates
 
         /// <summary>
         /// Годы, которые нужно обновить: год запущенного Revit плюс все годы,
-        /// для которых плагин уже установлен в %LOCALAPPDATA%\SheetViewsMap.
+        /// для которых плагин уже установлен в %LOCALAPPDATA%\PallMall.
         /// </summary>
         private List<int> CollectTargetYears()
         {
@@ -262,7 +262,7 @@ namespace SheetViewsMap.Updates
                         int year;
                         if (name != null && name.Length == 4 && int.TryParse(name, out year) &&
                             SupportedYears.Contains(year) && !years.Contains(year) &&
-                            File.Exists(Path.Combine(dir, "SheetViewsMap" + year + ".dll")))
+                            File.Exists(Path.Combine(dir, "PallMall" + year + ".dll")))
                         {
                             years.Add(year);
                         }
@@ -283,7 +283,7 @@ namespace SheetViewsMap.Updates
         private void WriteMarker(ReleaseInfo release, List<ReleaseAsset> downloads)
         {
             var builder = new StringBuilder();
-            builder.AppendLine("# SheetViewsMap pending update");
+            builder.AppendLine("# PallMall pending update");
             builder.AppendLine("Version=" + release.Version);
 
             foreach (ReleaseAsset asset in downloads)
@@ -303,7 +303,7 @@ namespace SheetViewsMap.Updates
 
         // ------------------------------------------------------------------ апдейтер
 
-        /// <summary>Путь к SheetViewsMap.Updater.exe: в корне папки плагина или рядом с DLL.</summary>
+        /// <summary>Путь к PallMall.Updater.exe: в корне папки плагина или рядом с DLL.</summary>
         public string FindUpdaterExe()
         {
             string installedPath = Path.Combine(RootDir, UpdaterFileName);

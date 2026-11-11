@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 
-namespace SheetViewsMap
+namespace PallMall
 {
     /// <summary>
     /// Мост между панелью и Revit API.

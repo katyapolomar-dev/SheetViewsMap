@@ -1,7 +1,7 @@
 using System;
 using Autodesk.Revit.UI;
 
-namespace SheetViewsMap
+namespace PallMall
 {
     /// <summary>
     /// Точка входа плагина. Revit вызывает OnStartup при загрузке и ищет здесь класс App.
@@ -14,7 +14,7 @@ namespace SheetViewsMap
         internal const string WindowTitle = "Виды на листах";
 
         /// <summary>Вкладка на ленте Revit.</summary>
-        internal const string RibbonTabName = "Sheet Views Map";
+        internal const string RibbonTabName = "PallMall";
 
         /// <summary>Группа (панель) внутри вкладки.</summary>
         internal const string RibbonPanelName = "Виды на листах";
@@ -49,7 +49,7 @@ namespace SheetViewsMap
             }
             catch (Exception ex)
             {
-                TaskDialog.Show("SheetViewsMap",
+                TaskDialog.Show("PallMall",
                     "Не удалось загрузить плагин:\n\n" + ex.Message);
                 return Result.Failed;
             }
